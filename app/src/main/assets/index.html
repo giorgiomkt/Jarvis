@@ -454,10 +454,15 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
         <div class="f"><label for="oaKey">Chave da API OpenAI (imagens)</label><input id="oaKey" type="password" placeholder="sk-…" autocomplete="off"><small>Criada em platform.openai.com. Cobrança por imagem, à parte do ChatGPT.</small></div>
         <div class="f"><label for="imgModel">Modelo de imagem</label><select id="imgModel"><option value="gpt-image-2">GPT Image 2</option><option value="gpt-image-1">GPT Image 1</option></select></div>
       </div>
+      <div class="two">
+        <div class="f"><label for="voiceEngine">Voz da Pantera</label><select id="voiceEngine"><option value="pantera">Pantera · voz neural (OpenAI)</option><option value="device">Voz do aparelho</option></select></div>
+        <div class="f"><label for="oaVoice">Timbre</label><select id="oaVoice"><option value="onyx">Onyx · grave e profundo</option><option value="ash">Ash · firme</option><option value="echo">Echo · seco</option><option value="ballad">Ballad · elegante</option><option value="verse">Verse · expressivo</option><option value="sage">Sage · calmo</option></select></div>
+      </div>
+      <div class="row"><button class="pill ghost" id="voiceTest" type="button">Ouvir a Pantera</button></div>
       <div class="f"><label for="apiKey">Chave da API Anthropic</label><input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"><small>Gerada em console.anthropic.com. Fica salva só neste aparelho.</small></div>
       <div class="two">
         <div class="f"><label for="model">Cérebro</label><select id="model"><option value="claude-sonnet-5-5">Sonnet 5.5 · rápido</option><option value="claude-opus-5-5">Opus 5.5 · profundo</option><option value="claude-haiku-5-5">Haiku 5.5 · leve</option></select></div>
-        <div class="f"><label for="voiceName">Voz</label><select id="voiceName"><option value="">Automática pt-BR</option></select></div>
+        <div class="f"><label for="voiceName">Voz do aparelho (reserva)</label><select id="voiceName"><option value="">Automática pt-BR</option></select></div>
       </div>
       <div class="two">
         <div class="f"><label for="furyRpm">Fúria acima de (rpm)</label><input id="furyRpm" type="number" inputmode="numeric" min="2500" max="7500" step="250"></div>
@@ -820,7 +825,26 @@ function loadVoices(){voices=(window.speechSynthesis?speechSynthesis.getVoices()
 if(window.speechSynthesis){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
 const NATIVE=window.Native||null;
 window.__nSpeak=ev=>{if(ev==='start')setPhase('speaking');else{setPhase(null);$('live').textContent=''}};
-function speak(text){if(NATIVE){try{NATIVE.speak(text,mode==='sport'||mode==='furia'?1.08:1)}catch(e){setPhase(null)}return}
+const VOICE_STYLE={
+  base:"Fale em português do Brasil com sotaque brasileiro nativo, sem nenhum sotaque estrangeiro. Você é a Pantera: voz masculina grave, baixa e encorpada, levemente rouca, calma e poderosa como um predador em repouso. Confiante, magnética, calorosa, com pausas intencionais e ritmo sem pressa. Nunca robótica, nunca de locutor de rádio. Palavras em italiano como andiamo e allora saem naturais.",
+  sport:"Mais energia e mais ritmo, firme e cortante, como um motor subindo de giro.",
+  furia:"Modo fúria: voz ainda mais grave e intensa, quase um rosnado contido, frases curtas e cortantes, autoridade total, sem gritar."};
+let curAudio=null;
+async function neuralSpeak(text,voice){
+  const key=store.get('oaKey','');if(!key)throw new Error('sem chave');
+  const instructions=VOICE_STYLE.base+(mode==='sport'?' '+VOICE_STYLE.sport:mode==='furia'?' '+VOICE_STYLE.furia:'');
+  const call=model=>fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},
+    body:JSON.stringify({model,voice:voice||store.get('oaVoice','onyx'),input:text.slice(0,3800),instructions,response_format:'mp3',speed:mode==='furia'||mode==='sport'?1.05:0.97})});
+  let r=await call('gpt-4o-mini-tts');if(!r.ok&&r.status===404)r=await call('tts-1-hd');if(!r.ok)throw new Error('tts '+r.status);
+  const url=URL.createObjectURL(await r.blob());if(curAudio){curAudio.pause()}const a=new Audio(url);curAudio=a;
+  a.onplay=()=>setPhase('speaking');a.onended=a.onerror=()=>{setPhase(null);$('live').textContent='';URL.revokeObjectURL(url)};
+  await a.play();
+}
+function speak(text){
+  if(store.get('voiceEngine','pantera')==='pantera'&&store.get('oaKey','')){setPhase('thinking');neuralSpeak(text).catch(()=>deviceSpeak(text));return}
+  deviceSpeak(text)}
+function deviceSpeak(text){if(curAudio){curAudio.pause();curAudio=null}
+  if(NATIVE){try{NATIVE.speak(text,mode==='sport'||mode==='furia'?1.08:1)}catch(e){setPhase(null)}return}
   if(!window.speechSynthesis){setPhase(null);return}
   speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='pt-BR';u.rate=mode==='sport'||mode==='furia'?1.08:.98;u.pitch=.82;
   const v=voices.find(x=>x.name===store.get('voice',''))||voices.find(x=>x.lang==='pt-BR')||voices[0];if(v)u.voice=v;
@@ -833,7 +857,7 @@ window.__nListen=(ev,txt)=>{if(ev==='start'){listening=true;nFin='';setPhase('li
   else if(ev==='partial'){$('live').textContent=txt}else if(ev==='final'){nFin=txt;$('live').textContent=txt}
   else if(ev==='error'){$('live').textContent=txt==='9'?'Microfone bloqueado':'Não entendi'}
   else if(ev==='end'){listening=false;const q=nFin.trim();nFin='';if(q)ask(q);else setPhase(null)}};
-function listen(){if(busy)return;
+function listen(){if(busy)return;if(curAudio){curAudio.pause();curAudio=null;setPhase(null)}
   if(NATIVE){if(listening){NATIVE.stopListen();return}try{NATIVE.stopSpeak()}catch(e){}NATIVE.listen();return}
   if(listening){rec&&rec.stop();return}
   if(!SR){openChat();return}
@@ -934,13 +958,13 @@ function openChat(){openHub('hoje');setTimeout(()=>$('typeInput').focus(),80)}
 function showNotes(){openHub('notas')}
 
 /* Gavetas */
-function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
+function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('voiceEngine').value=store.get('voiceEngine','pantera');$('oaVoice').value=store.get('oaVoice','onyx');$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
 $('btnChat').addEventListener('click',()=>openHub('hoje'));$('aiThumb').addEventListener('click',()=>openHub('hoje'));$('aiTitle').addEventListener('click',()=>openHub('hoje'));
 $('btnNotes').addEventListener('click',showNotes);$('appNotes').addEventListener('click',showNotes);$('appSettings').addEventListener('click',openSettings);
 document.querySelectorAll('.drawer').forEach(d=>d.addEventListener('click',e=>{if(e.target===d||e.target.closest('[data-close]'))d.hidden=true}));
 addEventListener('keydown',e=>{if(e.key==='Escape'){$('imgview').hidden=true;document.querySelectorAll('.drawer').forEach(d=>d.hidden=true);$('hub').hidden=true}});
 $('compose').addEventListener('submit',e=>{e.preventDefault();const v=$('typeInput').value.trim();if(!v)return;$('typeInput').value='';ask(v)});
-$('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
+$('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('voiceEngine',$('voiceEngine').value);store.set('oaVoice',$('oaVoice').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
   store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.'});
 $('btnClear').addEventListener('click',()=>{history=[];store.set('history',[]);render();$('settings').hidden=true});
 $('btnClearNotes').addEventListener('click',()=>{notes=[];store.set('notes',[]);$('settings').hidden=true});
@@ -948,6 +972,10 @@ $('btnClearNotes').addEventListener('click',()=>{notes=[];store.set('notes',[]);
 /* Música: abre a playlist configurada */
 $('appMusic').addEventListener('click',e=>{const pl=store.get('playlist','');if(NATIVE){e.preventDefault();NATIVE.playPlaylist()}else if(pl){e.preventDefault();window.open(pl,'_blank')}});
 if(NATIVE&&store.get('playlist',''))try{NATIVE.setPlaylist(store.get('playlist',''))}catch(e){}
+
+$('voiceTest').addEventListener('click',()=>{store.set('oaKey',$('oaKey').value.trim());const v=$('oaVoice').value;
+  const t='Buongiorno, Giorgio. Motor ligado, cabeça fria. Me diz qual é a jogada de hoje, que eu cuido do resto.';
+  if($('voiceEngine').value==='pantera'&&store.get('oaKey',''))neuralSpeak(t,v).catch(()=>deviceSpeak(t));else deviceSpeak(t)});
 
 /* Partida */
 if(store.get('apiKey','')){const today=new Date().toDateString();if(store.get('lastStart','')!==today){store.set('lastStart',today);setTimeout(()=>ask('[PARTIDA]'),900)}}
