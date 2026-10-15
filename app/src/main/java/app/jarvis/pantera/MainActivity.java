@@ -291,6 +291,23 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void open(String url) { openExternal(url); }
         @JavascriptInterface public void setPlaylist(String link) { prefs.edit().putString("playlist", link == null ? "" : link).apply(); }
         @JavascriptInterface public void playPlaylist() { ui.post(() -> playPlaylist(false)); }
+        @JavascriptInterface public void saveConfig(String json) { prefs.edit().putString("vault", json).apply(); }
+        @JavascriptInterface public String loadConfig() { return prefs.getString("vault", ""); }
+        @JavascriptInterface public boolean saveBackup(String json) {
+            try {
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.Downloads.DISPLAY_NAME, "jarvis-backup.json");
+                v.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                if (Build.VERSION.SDK_INT >= 29) {
+                    v.put(MediaStore.Downloads.RELATIVE_PATH, "Download/JARVIS");
+                    Uri u = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                    if (u == null) return false;
+                    try (java.io.OutputStream o = getContentResolver().openOutputStream(u)) { if (o == null) return false; o.write(json.getBytes("UTF-8")); }
+                    return true;
+                }
+                return false;
+            } catch (Exception e) { return false; }
+        }
         @JavascriptInterface public boolean saveImage(String b64) {
             try {
                 byte[] png = Base64.decode(b64, Base64.DEFAULT);

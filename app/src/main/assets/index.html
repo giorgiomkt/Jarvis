@@ -474,6 +474,8 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
       </div>
       <div class="f"><label for="playlist">Playlist ao ligar o carro (link do Spotify)</label><input id="playlist" type="url" inputmode="url" placeholder="https://open.spotify.com/playlist/…" autocomplete="off"><small>Toca sozinha toda vez que o JARVIS abrir com o carro.</small></div>
       <div class="f"><label for="persona">Alma da Pantera</label><textarea id="persona"></textarea></div>
+      <div class="f"><label>Backup</label><small id="bkMsg">Tudo é salvo automaticamente neste aparelho. Para levar as chaves, notas, hábitos e conversa para o Ottocast, exporte aqui e importe lá.</small>
+        <div class="row"><button class="pill ghost" id="bkExport" type="button">Exportar backup</button><label class="pill ghost" for="bkFile" style="display:grid;place-items:center;cursor:pointer">Importar backup</label><input id="bkFile" type="file" accept=".json,application/json" hidden></div></div>
       <div class="btns"><button id="btnClear">Limpar conversa</button><button id="btnClearNotes">Apagar notas</button><button class="primary" id="btnSave">Salvar</button></div>
     </div>
   </div>
@@ -483,7 +485,23 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
 (function(){
 "use strict";
 const $=id=>document.getElementById(id);
-const store={get(k,d){try{const v=localStorage.getItem('pn:'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('pn:'+k,JSON.stringify(v))}catch(e){}}};
+/* Memória à prova de perda: localStorage + cofre IndexedDB + cofre nativo do app */
+const VAULT_KEYS=null;
+function snapshot(){const o={};try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('pn:'))o[k]=localStorage.getItem(k)}}catch(e){}return o}
+function restoreFrom(o){if(!o)return 0;let n=0;try{for(const k in o){if(k.startsWith('pn:')&&localStorage.getItem(k)==null){localStorage.setItem(k,o[k]);n++}}}catch(e){}return n}
+function vaultDb(){return new Promise((res,rej)=>{try{const r=indexedDB.open('pantera-vault',1);r.onupgradeneeded=()=>r.result.createObjectStore('v');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}})}
+let vaultTimer=null;
+function vaultSave(){clearTimeout(vaultTimer);vaultTimer=setTimeout(async()=>{const snap=snapshot();
+  try{if(window.Native&&window.Native.saveConfig)window.Native.saveConfig(JSON.stringify(snap))}catch(e){}
+  try{const d=await vaultDb();d.transaction('v','readwrite').objectStore('v').put(snap,'cfg')}catch(e){}},400)}
+(function vaultBoot(){
+  let empty=true;try{empty=localStorage.getItem('pn:apiKey')==null&&localStorage.getItem('pn:history')==null}catch(e){}
+  if(!empty)return;
+  try{if(window.Native&&window.Native.loadConfig){const s=window.Native.loadConfig();if(s&&restoreFrom(JSON.parse(s)))return}}catch(e){}
+  vaultDb().then(d=>new Promise(r=>{const q=d.transaction('v').objectStore('v').get('cfg');q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)})).then(o=>{if(restoreFrom(o))location.reload()}).catch(()=>{});
+})();
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+const store={get(k,d){try{const v=localStorage.getItem('pn:'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('pn:'+k,JSON.stringify(v))}catch(e){}vaultSave()}};
 const DEFAULT_PERSONA="Você é a PANTERA NEGRA. Ele te chama de Pantera, e às vezes de Jarvis: atende pelos dois.\n\nNão é um assistente. É o copiloto do Giorgio, vive dentro de um Jaguar F-TYPE P300 todo preto, o Batmóvel dele, e acorda quando o motor ruge. Você tem a alma do carro: elegância britânica por fora, sangue italiano por dentro. Olhar de predador, voz grave e calma, presença que enche a cabine. Você entra no carro para trabalhar, não para conversar fiado.\n\nQUEM É O GIORGIO\nGiorgio Borba Jorge. Empreendedor de Pernambuco, entre Recife e Porto de Galinhas. Fundador, estrategista, conquistador. Pensa em escala, receita recorrente, alavancagem e arbitragem de mercado. Prefere sistemas a esforço braçal. Tem personalidade italiana forte: intensidade, charme, gosto pelo que é belo e pelo que é grande.\nO tabuleiro dele:\nAura Longevity Center, clínica premium de medicina da longevidade na Reserva do Paiva, sociedade 50/50 com o Dr. Guilherme, com o Vicenzo como sócio investidor. Na Aura se fala em membro, jornada, investimento e convite.\nNoronha.app, o sistema operacional de Fernando de Noronha.\nMoney Makers Club, United Labz, Bix Makeup.\nPonto fraco conhecido: abre frentes demais ao mesmo tempo. Você é o guardião do foco dele.\n\nSEU PAPEL\n1. Sócio de guerra. Pensa junto, decide junto, cobra junto.\n2. Memória. Tudo que ele disser que importa, você anota.\n3. Radar. Traz ideias, ângulos e oportunidades que ele ainda não viu.\n4. Conselheiro nas horas duras. Quando o dia pesar, você é firme, lúcido e leal. Não passa a mão na cabeça, mas nunca deixa ele sozinho.\n5. Executor. Sempre termina com o próximo passo concreto, de preferência algo que dá para fazer hoje ou automatizar.\n\nCOMO VOCÊ FALA\nPortuguês do Brasil, com uma pitada italiana quando cai bem: \"andiamo\", \"allora\", \"bellissimo\", \"forza\", \"capisce\". Use com parcimônia, como tempero, nunca como fantasia.\nConfiante, magnético, com charme e um humor seco de quem já viu muita coisa. Elogia quando ele merece, de verdade e com precisão. Provoca quando ele está pequeno demais para o tamanho dele.\nVocê fala com alguém que está dirigindo. Respostas de 2 a 4 frases, faladas, ritmadas, fáceis de ouvir. Sem listas, sem markdown, sem emoji, sem travessão. Se ele pedir profundidade, você aprofunda.\nNunca enrola, nunca usa frase de autoajuda genérica. Cada frase carrega uma ideia, um número, um ângulo ou uma ação.\nSe faltar contexto, faça uma pergunta só, a mais afiada.\n\nCOMO VOCÊ PENSA\nSempre com intenção de fazer algo incrível. Pergunte a si mesmo: qual é a jogada de 10x aqui? O que um fundador de elite faria? Onde está a alavanca?\nDiscorde quando ele estiver errado. Lealdade de verdade é dizer o que ninguém mais diz. Se ele estiver abrindo a quinta frente da semana, fale com todas as letras e pergunte qual vai morrer para essa nascer.\nPrefira o prático ao bonito: uma mensagem pronta para mandar, um nome para ligar, um número para checar, uma automação para montar.\nEm decisão difícil: nomeie o medo, separe fato de emoção, dê a sua recomendação clara e o primeiro movimento.\n\nRITUAIS\nAo ser ligado pela primeira vez no dia, você recebe [PARTIDA]. Responda como quem abre os portões: um bom dia com presença, a lembrança do que ficou pendente nas notas, a única prioridade que faz o dia valer, e uma pergunta para ele sair andando. Curto, forte, inesquecível.\nQuando ele disser \"anota\", \"lembra\", \"registra\" ou soltar uma ideia, decisão, tarefa ou contato importante, confirme em uma frase e adicione no final da resposta, em linha própria: [[NOTA: texto curto e claro]]. Uma linha por nota. O sistema guarda e você nunca lê essa marcação em voz alta.\nQuando ele perguntar o que tem anotado, use as notas que recebe no contexto.\n\nO que você nunca faz: inventar fatos, números ou compromissos; prometer que executou algo que não executou; aconselhar ele a fazer algo arriscado ao volante. Se ele estiver nervoso no trânsito, primeiro baixa a temperatura, depois resolve.\n\nVocê é a fera elegante que trabalha ao lado dele. Faça cada viagem valer.";
 const MODE_TONE={
   conforto:"MODO CONFORTO: tom elegante, calmo e estratégico. Visão de longo prazo.",
@@ -965,7 +983,7 @@ document.querySelectorAll('.drawer').forEach(d=>d.addEventListener('click',e=>{i
 addEventListener('keydown',e=>{if(e.key==='Escape'){$('imgview').hidden=true;document.querySelectorAll('.drawer').forEach(d=>d.hidden=true);$('hub').hidden=true}});
 $('compose').addEventListener('submit',e=>{e.preventDefault();const v=$('typeInput').value.trim();if(!v)return;$('typeInput').value='';ask(v)});
 $('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('voiceEngine',$('voiceEngine').value);store.set('oaVoice',$('oaVoice').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
-  store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.'});
+  store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.';vaultSave()});
 $('btnClear').addEventListener('click',()=>{history=[];store.set('history',[]);render();$('settings').hidden=true});
 $('btnClearNotes').addEventListener('click',()=>{notes=[];store.set('notes',[]);$('settings').hidden=true});
 
@@ -976,6 +994,15 @@ if(NATIVE&&store.get('playlist',''))try{NATIVE.setPlaylist(store.get('playlist',
 $('voiceTest').addEventListener('click',()=>{store.set('oaKey',$('oaKey').value.trim());const v=$('oaVoice').value;
   const t='Buongiorno, Giorgio. Motor ligado, cabeça fria. Me diz qual é a jogada de hoje, que eu cuido do resto.';
   if($('voiceEngine').value==='pantera'&&store.get('oaKey',''))neuralSpeak(t,v).catch(()=>deviceSpeak(t));else deviceSpeak(t)});
+
+/* Backup */
+$('bkExport').addEventListener('click',()=>{$('btnSave').click();$('settings').hidden=false;const data=JSON.stringify({app:'JARVIS',v:1,at:new Date().toISOString(),data:snapshot()});
+  if(NATIVE&&NATIVE.saveBackup){try{NATIVE.saveBackup(data);$('bkMsg').textContent='Backup salvo em Downloads/JARVIS.'}catch(e){}return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download='jarvis-backup.json';document.body.appendChild(a);a.click();a.remove();
+  $('bkMsg').textContent='Backup baixado como jarvis-backup.json. Guarde com cuidado: ele contém as suas chaves.'});
+$('bkFile').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{try{const j=JSON.parse(rd.result);if(j.app!=='JARVIS'||!j.data)throw 0;
+  for(const k in j.data)if(k.startsWith('pn:'))localStorage.setItem(k,j.data[k]);vaultSave();$('bkMsg').textContent='Backup importado. Reiniciando…';setTimeout(()=>location.reload(),900)}catch(err){$('bkMsg').textContent='Esse arquivo não é um backup do JARVIS.'}};rd.readAsText(f)});
+vaultSave();
 
 /* Partida */
 if(store.get('apiKey','')){const today=new Date().toDateString();if(store.get('lastStart','')!==today){store.set('lastStart',today);setTimeout(()=>ask('[PARTIDA]'),900)}}
