@@ -344,6 +344,8 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
 .vc.on i{background:var(--accent);color:#000}
 .vc.playing i{animation:pulse .6s ease-in-out infinite}
 @media (max-width:700px){.voices{grid-template-columns:1fr 1fr}}
+#voiceMsg.err{color:#ff6a5a;font-size:15px;font-weight:600}
+.vc.locked{opacity:.45}
 </style>
 </head>
 <body data-mode="conforto">
@@ -494,6 +496,7 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
         <div class="f"><label for="voiceStyle">Personalidade da voz</label><select id="voiceStyle"><option value="pantera">Pantera · grave, calma, predadora</option><option value="jarvis">Jarvis · elegante, preciso, mordomo de elite</option><option value="italiano">Italiano · charme e calor, sangue quente</option><option value="comandante">Comandante · firme, curto, autoridade</option></select></div>
       </div>
       <div class="f"><label>Timbre · toque para ouvir</label><input type="hidden" id="oaVoice"><div class="voices" id="voices"></div><small id="voiceMsg">Toque em um timbre: ele fala na hora e fica selecionado. Depois, Salvar.</small></div>
+      <div class="f"><label>Vozes do aparelho · funcionam sem internet</label><div class="voices" id="devVoices"></div></div>
       <div class="f"><label for="apiKey">Chave da API Anthropic</label><input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"><small>Gerada em console.anthropic.com. Fica salva só neste aparelho.</small></div>
       <div class="two">
         <div class="f"><label for="model">Cérebro</label><select id="model"><option value="claude-sonnet-5-5">Sonnet 5.5 · rápido</option><option value="claude-opus-5-5">Opus 5.5 · profundo</option><option value="claude-haiku-5-5">Haiku 5.5 · leve</option></select></div>
@@ -1050,16 +1053,26 @@ if(NATIVE&&store.get('playlist',''))try{NATIVE.setPlaylist(store.get('playlist',
 
 const VOICES=[['onyx','Onyx','grave e profundo'],['cedar','Cedar','encorpado, natural'],['ash','Ash','firme e seco'],['ballad','Ballad','elegante, suave'],['echo','Echo','direto, sóbrio'],['verse','Verse','expressivo'],['fable','Fable','narrador, caloroso'],['sage','Sage','calmo, sereno'],['alloy','Alloy','neutro, claro'],['marin','Marin','natural, leve'],['coral','Coral','vivo, aberto'],['nova','Nova','brilhante']];
 const SAMPLE='Oi, eu sou o Jarvis, apelidado como Pantera Negra. Irei te ajudar para sempre.';
-function buildVoices(){const box=$('voices');box.innerHTML='';const cur=$('oaVoice').value||store.get('oaVoice','onyx');
+function buildDeviceVoices(){const box=$('devVoices');if(!box)return;box.innerHTML='';
+  const all=window.speechSynthesis?speechSynthesis.getVoices().filter(v=>/^pt/i.test(v.lang)):[];
+  if(!all.length){box.innerHTML='<small style="color:var(--dim)">Nenhuma voz em português instalada neste aparelho.</small>';return}
+  const cur=store.get('voice','');
+  all.forEach(v=>{const b=document.createElement('button');b.type='button';b.className='vc'+(v.name===cur?' on':'');b.innerHTML='<i>▶</i><span><b></b><small></small></span>';
+    b.querySelector('b').textContent=v.name.replace(/\(.*\)/,'').replace('Microsoft','').trim().slice(0,22);b.querySelector('small').textContent=v.lang+(v.localService?' · local':' · online');
+    b.onclick=()=>{$('voiceName').value=v.name;store.set('voice',v.name);$('voiceEngine').value='device';document.querySelectorAll('#devVoices .vc').forEach(x=>x.classList.toggle('on',x===b));
+      if(curAudio){curAudio.pause();curAudio=null}speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(SAMPLE);u.voice=v;u.lang=v.lang;u.pitch=.82;u.rate=.98;speechSynthesis.speak(u);
+      $('voiceMsg').classList.remove('err');$('voiceMsg').textContent='Tocando a voz do aparelho: '+v.name+'. Para usar, Salvar.'};box.appendChild(b)})}
+if(window.speechSynthesis)speechSynthesis.addEventListener('voiceschanged',buildDeviceVoices);
+function buildVoices(){buildDeviceVoices();const box=$('voices');box.innerHTML='';const cur=$('oaVoice').value||store.get('oaVoice','onyx');
   VOICES.forEach(([id,n,d])=>{const b=document.createElement('button');b.type='button';b.className='vc'+(id===cur?' on':'');b.dataset.v=id;
     b.innerHTML='<i>▶</i><span><b></b><small></small></span>';b.querySelector('b').textContent=n;b.querySelector('small').textContent=d;
     b.onclick=()=>previewVoice(id,b);box.appendChild(b)})}
 async function previewVoice(id,btn){$('oaVoice').value=id;document.querySelectorAll('.vc').forEach(x=>x.classList.toggle('on',x.dataset.v===id));
   const key=$('oaKey').value.trim();if(key)store.set('oaKey',key);
   if(!key){$('voiceMsg').textContent='Cole a chave da OpenAI acima para ouvir os timbres.';return}
-  document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'));btn&&btn.classList.add('playing');$('voiceMsg').textContent='Gerando a amostra…';
+  document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'));btn&&btn.classList.add('playing');$('voiceMsg').classList.remove('err');$('voiceMsg').textContent='Gerando a amostra com a voz '+id+'…';
   try{await neuralSpeak(SAMPLE,id,$('voiceStyle').value);$('voiceMsg').textContent='Tocando: '+id+'. Gostou? Toque em Salvar.'}catch(e){btn&&btn.classList.remove('playing');const m=e.message;$('voiceMsg').textContent=m==='SEM_CREDITO'?'A conta da OpenAI está sem crédito. Adicione crédito em platform.openai.com › Billing e toque de novo.':m==='CHAVE'?'A chave da OpenAI foi recusada. Confira se colou inteira.':/Failed to fetch|NetworkError|Load failed/i.test(m)?'Sem acesso à internet aqui. Abra o pantera.html direto no Chrome (a prévia dentro do Claude bloqueia a conexão).':'Não consegui tocar essa voz ('+m+').';
-    deviceSpeak(SAMPLE)}}
+    $('voiceMsg').classList.add('err');if(m==='SEM_CREDITO')document.querySelectorAll('.vc').forEach(x=>x.classList.add('locked'))}}
 $('voiceStyle').addEventListener('change',()=>{const id=$('oaVoice').value||'onyx';previewVoice(id,document.querySelector('.vc[data-v="'+id+'"]'))});
 
 /* Backup */
