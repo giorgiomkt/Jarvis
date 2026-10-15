@@ -286,6 +286,7 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
 .pill.ghost{background:transparent;color:var(--ink);border:1px solid var(--hair)}
 .mini-notes,.allnotes{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
 .mini-notes li{font-size:16px;color:#d9d4cd;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.agenda li{display:flex;gap:12px;-webkit-line-clamp:unset}.agenda li b{color:var(--acc,#e8b04a);font-weight:600;min-width:52px;font-variant-numeric:tabular-nums}
 .mini-notes li small,.allnotes li small{color:var(--dim);font-size:13px;margin-right:8px}
 .allnotes li{display:flex;align-items:center;gap:14px;border:1px solid var(--hair);border-radius:12px;padding:12px 12px 12px 18px;font-size:17px;line-height:1.4}
 .allnotes li span{flex:1}
@@ -427,6 +428,7 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
           <div class="panelx"><span class="label">Hábitos de hoje</span><p class="big" id="habScore">0 de 0</p><button class="pill ghost" data-go="rotina">Abrir rotina</button></div>
           <div class="panelx"><span class="label">Últimas notas</span><ul class="mini-notes" id="lastNotes"></ul></div>
         </div>
+        <div class="panelx"><span class="label" id="agLabel">Agenda de hoje</span><ul class="mini-notes agenda" id="agendaHoje"></ul></div>
         <div class="row"><button class="pill" data-q="[PARTIDA]">Briefing do dia</button><button class="pill" data-q="Revisa meu dia comigo: o que foi feito, o que ficou pendente e o que eu faço amanhã cedo.">Revisar meu dia</button></div>
       </div>
       <div class="tab" data-pane="empresas" hidden><div class="cos" id="cos"></div></div>
@@ -525,6 +527,7 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
         <div class="f"><label for="tireR">Calibragem traseira (lb)</label><input id="tireR" type="number" inputmode="numeric" min="20" max="50" placeholder="Ver adesivo da porta"></div>
       </div>
       <div class="f"><label for="playlist">Playlist ao ligar o carro (link do Spotify)</label><input id="playlist" type="url" inputmode="url" placeholder="https://open.spotify.com/playlist/…" autocomplete="off"><small>Toca sozinha toda vez que o JARVIS abrir com o carro.</small></div>
+      <div class="f"><label for="calUrl">Agenda Google (link do JARVIS)</label><input id="calUrl" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec?k=…" autocomplete="off"><small id="calMsg">Com a agenda ligada, a Pantera lê seus compromissos e marca novos por voz.</small></div>
       <div class="f"><label for="persona">Alma da Pantera</label><textarea id="persona"></textarea></div>
       <div class="f"><label>Backup</label><small id="bkMsg">Tudo é salvo automaticamente neste aparelho. Para levar as chaves, notas, hábitos e conversa para o Ottocast, exporte aqui e importe lá.</small>
         <div class="row"><button class="pill ghost" id="bkExport" type="button">Exportar backup</button><label class="pill ghost" for="bkFile" style="display:grid;place-items:center;cursor:pointer">Importar backup</label><input id="bkFile" type="file" accept=".json,application/json" hidden></div></div>
@@ -886,32 +889,77 @@ function render(){const feed=$('feed');feed.innerHTML='';
   const last=[...history].reverse().find(m=>m.role==='assistant'&&!m.note);if(last)$('aiLine').textContent=last.content.split('\n')[0];
 }
 render();
+/* Agenda Google: ponte via Apps Script (link + chave guardados só neste aparelho) */
+const TZ='America/Recife';
+let cal={ev:store.get('calCache',[]),at:0,err:''};
+const calOn=()=>/^https:\/\/script\.google(usercontent)?\.com\//.test(store.get('calUrl',''));
+async function calCall(params,ms=6000){const u=new URL(store.get('calUrl',''));Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
+  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),ms);
+  try{const r=await fetch(u.toString(),{signal:ctl.signal,redirect:'follow'});const d=await r.json();if(!d.ok)throw new Error(d.erro||'falhou');return d}finally{clearTimeout(to)}}
+async function calEnsure(force){if(!calOn())return;if(!force&&Date.now()-cal.at<120000)return;
+  const de=new Date();de.setHours(0,0,0,0);const ate=new Date(de.getTime()+8*864e5);
+  try{const d=await calCall({a:'listar',de:de.toISOString(),ate:ate.toISOString()},force?9000:3500);cal.ev=d.eventos||[];cal.at=Date.now();cal.err='';store.set('calCache',cal.ev);
+    if(force&&$('calMsg'))$('calMsg').textContent='Agenda conectada: '+cal.ev.length+' compromissos nos próximos 7 dias.'}
+  catch(e){cal.err=e.message;if(force&&$('calMsg'))$('calMsg').textContent='Não conectou: '+(/chave/.test(e.message)?'chave inválida no link.':e.message.slice(0,60))}
+  if(!$('hub').hidden)renderAgenda()}
+const fDay=d=>new Date(d).toLocaleDateString('pt-BR',{timeZone:TZ,weekday:'short',day:'2-digit',month:'2-digit'});
+const fHr=d=>new Date(d).toLocaleTimeString('pt-BR',{timeZone:TZ,hour:'2-digit',minute:'2-digit'});
+const dKey=d=>new Date(d).toLocaleDateString('en-CA',{timeZone:TZ});
+function calPrompt(){
+  if(!calOn())return ' A agenda Google ainda não está conectada: se ele pedir para marcar algo, diga que basta colar o link da agenda em Config.';
+  const list=cal.ev.length?cal.ev.map((e,i)=>'#'+(i+1)+' '+fDay(e.inicio)+' '+(e.diaTodo?'dia todo':fHr(e.inicio)+' às '+fHr(e.fim))+' · '+e.titulo+(e.local?' · '+e.local:'')).join('\n'):'(nenhum compromisso)';
+  return '\nAGENDA GOOGLE (próximos 7 dias, horário de Recife)'+(cal.err?' [última leitura falhou, pode estar desatualizada]':'')+':\n'+list+
+  '\nPara MARCAR um compromisso, confirme em uma frase e termine com [[AGENDA: título | AAAA-MM-DD HH:MM | duração em minutos | local opcional]] (use AAAA-MM-DD sem hora para dia todo; sem duração dita, use 60). Antes de marcar, olhe a agenda e avise se houver conflito. Para REMARCAR, termine com [[MOVER: número | AAAA-MM-DD HH:MM]] e para CANCELAR, com [[CANCELAR: número]]; esses dois só acontecem quando ele tocar para confirmar. No [PARTIDA], diga os compromissos de hoje.'}
+function calParse(s){s=s.trim();if(/^\d{4}-\d{2}-\d{2}$/.test(s))return{d:new Date(s+'T00:00:00-03:00'),allDay:true};const m=s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})/);if(!m)return null;return{d:new Date(m[1]+'T'+m[2].padStart(2,'0')+':'+m[3]+':00-03:00'),allDay:false}}
+function calTags(text){if(!/\[\[AGENDA:/.test(text))return text;
+  return text.replace(/\[\[AGENDA:\s*([^\]]+)\]\]/g,(_,t)=>{const [titulo,quando,dur,local]=t.split('|').map(x=>(x||'').trim());const w=calParse(quando||'');
+    if(!calOn()||!titulo||!w){$('live').textContent='Não consegui marcar: '+(calOn()?'data inválida':'agenda não conectada');return''}
+    const fim=new Date(w.d.getTime()+(parseInt(dur)||60)*60000);
+    calCall({a:'criar',titulo,inicio:w.d.toISOString(),fim:fim.toISOString(),diaTodo:w.allDay?'1':'0',local:local||''},9000)
+      .then(d=>{$('live').textContent='Na agenda: '+titulo+' · '+(w.allDay?fDay(w.d):fDay(w.d)+' '+fHr(w.d));calEnsure(true)})
+      .catch(e=>{$('live').textContent='Agenda falhou: '+e.message.slice(0,50)});return''}).trim()}
+function calChip(el,a){const parts=a.v.split('|').map(x=>x.trim()),ev=cal.ev[(parseInt(parts[0].replace('#',''))||0)-1];
+  if(!ev){el.textContent='Compromisso não encontrado';return}
+  el.removeAttribute('target');el.href='#';
+  if(a.k==='CANCELAR'){el.textContent='Cancelar: '+ev.titulo+' · '+fDay(ev.inicio)}
+  else{const w=calParse(parts[1]||'');if(!w){el.textContent='Horário inválido';return}el.textContent='Remarcar '+ev.titulo+' para '+fDay(w.d)+' '+fHr(w.d)}
+  el.addEventListener('click',e=>{e.preventDefault();let p;
+    if(a.k==='CANCELAR')p=calCall({a:'cancelar',id:ev.id},9000).then(()=>'Cancelado: '+ev.titulo);
+    else{const w=calParse(parts[1]),dur=new Date(ev.fim)-new Date(ev.inicio);p=calCall({a:'mover',id:ev.id,inicio:w.d.toISOString(),fim:new Date(w.d.getTime()+dur).toISOString()},9000).then(()=>'Remarcado: '+ev.titulo+' · '+fDay(w.d)+' '+fHr(w.d))}
+    p.then(m=>{$('live').textContent=m;calEnsure(true)}).catch(err=>{$('live').textContent='Agenda falhou: '+err.message.slice(0,50)})})}
+function renderAgenda(){const ul=$('agendaHoje');if(!ul)return;ul.innerHTML='';
+  const add=(b,t)=>{const li=document.createElement('li');if(b){const x=document.createElement('b');x.textContent=b;li.appendChild(x)}li.appendChild(document.createTextNode(t));ul.appendChild(li)};
+  if(!calOn()){add('','Conecte sua agenda Google em Config.');return}
+  const hoje=dKey(new Date()),evs=cal.ev.filter(e=>dKey(e.inicio)===hoje||(e.diaTodo&&dKey(e.inicio)<=hoje&&dKey(e.fim)>hoje));
+  if(evs.length){evs.forEach(e=>add(e.diaTodo?'Dia':fHr(e.inicio),e.titulo));return}
+  const prox=cal.ev.find(e=>new Date(e.inicio)>new Date());add('','Dia livre.'+(prox?' Próximo: '+prox.titulo+', '+fDay(prox.inicio)+' '+fHr(prox.inicio)+'.':''))}
+setTimeout(()=>calEnsure(true),3000);setInterval(()=>calEnsure(),300000);
 function systemPrompt(){
   const when=new Date().toLocaleString('pt-BR',{weekday:'long',day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
   const n=notes.length?notes.slice(-30).map(x=>'- '+x.d+': '+x.t).join('\n'):'(nenhuma nota ainda)';
   const hh=t=>new Date(t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const car=obd.live?`\nCARRO (leitura OBD das ${hh(tel.at)}): ${Math.round(tel.spd)} km/h, ${Math.round(tel.rpm)} rpm, motor ${tel.clt==null?'indisponível':tel.clt+'°C'}, tanque ${tel.fuel==null?'indisponível':Math.round(tel.fuel)+'%'}, pneus ${Object.values(tel.tires).some(v=>v!=null)?Object.entries(tel.tires).map(([k,v])=>k+' '+(v==null?'?':Math.round(v)+' lb')).join(', '):'sem sensor'}, alertas ${tel.dtc==null?'não lidos':tel.dtc.length?tel.dtc.join(', '):'nenhum'}.`:'\nCARRO: OBD desconectado. Não há telemetria do motor; velocidade aproximada por GPS '+Math.round(tel.spd)+' km/h. Nunca invente leituras.';
-  const tools='\nAÇÕES DISPONÍVEIS: para criar uma imagem que ele pedir, diga em uma frase curta o que vai criar e termine com [[IMAGEM: formato | prompt]], onde formato é quadrado, horizontal ou vertical e o prompt é detalhado, em inglês, com estilo, luz, composição e cores; se a imagem tiver texto escrito, mantenha o texto em português entre aspas. '+(store.get('oaKey','')?'':'(A chave da OpenAI ainda não foi configurada: avise que ele precisa colocar em Config.) ')+'Também, para levar ele a um lugar, termine a resposta com [[NAV: endereço ou nome do lugar]] e diga que é só tocar para confirmar. Para tocar música, termine com [[MUSICA: nome da playlist, artista ou faixa]]. Você não envia mensagens, não compra e não altera agenda: para isso, diga o que faria e peça que ele faça.';
+  const tools='\nAÇÕES DISPONÍVEIS: para criar uma imagem que ele pedir, diga em uma frase curta o que vai criar e termine com [[IMAGEM: formato | prompt]], onde formato é quadrado, horizontal ou vertical e o prompt é detalhado, em inglês, com estilo, luz, composição e cores; se a imagem tiver texto escrito, mantenha o texto em português entre aspas. '+(store.get('oaKey','')?'':'(A chave da OpenAI ainda não foi configurada: avise que ele precisa colocar em Config.) ')+'Também, para levar ele a um lugar, termine a resposta com [[NAV: endereço ou nome do lugar]] e diga que é só tocar para confirmar. Para tocar música, termine com [[MUSICA: nome da playlist, artista ou faixa]]. Você não envia mensagens e não compra nada: para isso, diga o que faria e peça que ele faça.'+calPrompt();
   return store.get('persona',DEFAULT_PERSONA)+'\n\nO carro é um Jaguar F-TYPE P300 preto que ele chama de Batmóvel.\nAGORA: '+when+'.'+car+tools+'\n'+MODE_TONE[mode]+'\nROTINA DE HOJE: '+(habits.length?habits.map(x=>x.n+(x.log&&x.log.includes(todayKey())?' (feito)':' (pendente)')+(streak(x)?', sequência '+streak(x):'')).join('; '):'nenhum hábito cadastrado')+'.\nPRIORIDADE DO DIA: '+(focus&&focus.day===todayKey()?focus.t+(focus.done?' (concluída)':''):'não definida')+'.\nPara definir a prioridade do dia, termine com [[FOCO: frase curta]]. Quando uma nota for de uma empresa, comece a nota com o nome dela, ex.: [[NOTA: Aura: ...]].\nNOTAS SALVAS:\n'+n;
 }
 function extractNotes(text){const found=[];const clean=text.replace(/\[\[NOTA:\s*([^\]]+)\]\]/g,(_,t)=>{found.push(t.trim());return''}).replace(/\n{3,}/g,'\n\n').trim();
   if(found.length){const d=new Date().toLocaleDateString('pt-BR');found.forEach(t=>notes.push({d,t}));store.set('notes',notes.slice(-200))}return{clean,count:found.length}}
 let actions=[];
-function extractActions(text){actions=[];const clean=text.replace(/\[\[(NAV|MUSICA):\s*([^\]]+)\]\]/g,(_,k,v)=>{actions.push({k,v:v.trim()});return''}).trim();renderActions();return clean}
+function extractActions(text){actions=[];const clean=text.replace(/\[\[(NAV|MUSICA|MOVER|CANCELAR):\s*([^\]]+)\]\]/g,(_,k,v)=>{actions.push({k,v:v.trim()});return''}).trim();renderActions();return clean}
 function renderActions(){['acts','acts2'].forEach(id=>{const box=$(id);box.innerHTML='';actions.forEach(a=>{const el=document.createElement('a');el.className='actchip';el.target='_blank';el.rel='noopener';
-  if(a.k==='NAV'){el.href='https://waze.com/ul?q='+encodeURIComponent(a.v)+'&navigate=yes';el.textContent='Ir: '+a.v}else{el.href='https://open.spotify.com/search/'+encodeURIComponent(a.v);el.textContent='Tocar: '+a.v;el.addEventListener('click',e=>{if(NATIVE&&NATIVE.playSearch){e.preventDefault();NATIVE.playSearch(a.v)}})}
+  if(a.k==='MOVER'||a.k==='CANCELAR'){calChip(el,a)}else if(a.k==='NAV'){el.href='https://waze.com/ul?q='+encodeURIComponent(a.v)+'&navigate=yes';el.textContent='Ir: '+a.v}else{el.href='https://open.spotify.com/search/'+encodeURIComponent(a.v);el.textContent='Tocar: '+a.v;el.addEventListener('click',e=>{if(NATIVE&&NATIVE.playSearch){e.preventDefault();NATIVE.playSearch(a.v)}})}
   el.addEventListener('click',()=>{actions=[];setTimeout(renderActions,300)});box.appendChild(el)});box.hidden=!actions.length})}
 function setPhase(p){document.body.classList.remove('listening','thinking','speaking');if(p)document.body.classList.add(p)}
 async function ask(q){
   if(busy)return;const key=store.get('apiKey','');if(!key){openSettings();return}
   if(/modo f[uú]ria/i.test(q))setMode('furia','voz');else if(/modo sport/i.test(q))setMode('sport','voz');
-  busy=true;history.push({role:'user',content:q});render();setPhase('thinking');$('live').textContent='';$('aiLine').textContent='Pensando…';
+  busy=true;await calEnsure();history.push({role:'user',content:q});render();setPhase('thinking');$('live').textContent='';$('aiLine').textContent='Pensando…';
   const msgs=history.filter(m=>!m.note&&!m.img).slice(-16).map(m=>({role:m.role,content:m.content}));
   try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:store.get('model','claude-sonnet-5-5'),max_tokens:600,system:systemPrompt(),messages:msgs})});
     const data=await r.json();if(!r.ok)throw new Error((data.error&&data.error.message)||('HTTP '+r.status));
     const raw=(data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim()||'Silêncio na linha. Tenta de novo.';
-    const{clean:c00,count}=extractNotes(raw);const c0=c00.replace(/\[\[FOCO:\s*([^\]]+)\]\]/g,(_,t)=>{focus={day:todayKey(),t:t.trim(),done:false};store.set('focus',focus);return''}).trim();let imgReq=null;const c1=c0.replace(/\[\[IMAGEM:\s*([^\]]+)\]\]/g,(_,t)=>{const i=t.indexOf('|');imgReq=i>0?{fmt:t.slice(0,i).trim().toLowerCase(),prompt:t.slice(i+1).trim()}:{fmt:'horizontal',prompt:t.trim()};return''}).trim();const clean=extractActions(c1);history.push({role:'assistant',content:clean});store.set('history',history.slice(-60));render();if(!$('hub').hidden)renderHub();
+    const{clean:c00,count}=extractNotes(raw);const c0=c00.replace(/\[\[FOCO:\s*([^\]]+)\]\]/g,(_,t)=>{focus={day:todayKey(),t:t.trim(),done:false};store.set('focus',focus);return''}).trim();let imgReq=null;const c1=c0.replace(/\[\[IMAGEM:\s*([^\]]+)\]\]/g,(_,t)=>{const i=t.indexOf('|');imgReq=i>0?{fmt:t.slice(0,i).trim().toLowerCase(),prompt:t.slice(i+1).trim()}:{fmt:'horizontal',prompt:t.trim()};return''}).trim();const clean=extractActions(calTags(c1));history.push({role:'assistant',content:clean});store.set('history',history.slice(-60));render();if(!$('hub').hidden)renderHub();
     if(count)$('live').textContent=count>1?count+' notas salvas':'Nota salva';speak(clean);if(imgReq)genImage(imgReq.fmt,imgReq.prompt,clean);
   }catch(e){history.pop();render();setPhase(null);$('aiLine').textContent=/401|auth|x-api-key/i.test(e.message)?'Chave da API inválida. Abra Config.':/fetch|network/i.test(e.message)?'Sem internet no momento.':'Erro: '+e.message.slice(0,60)}
   finally{busy=false}}
@@ -1050,7 +1098,7 @@ let habits=store.get('habits',[]),focus=store.get('focus',null);
 const todayKey=()=>new Date().toISOString().slice(0,10);
 function streak(hb){let s=0;const d=new Date();for(;;){const k=d.toISOString().slice(0,10);if(hb.log&&hb.log.includes(k)){s++;d.setDate(d.getDate()-1)}else break}return s}
 function saveHabits(){store.set('habits',habits);renderHub()}
-function renderHub(){
+function renderHub(){renderAgenda();
   const now=new Date();$('todayDate').textContent=now.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
   const hr=now.getHours();$('todayGreet').textContent=(hr<12?'Bom dia':hr<18?'Boa tarde':'Boa noite')+', Giorgio.';
   const f=focus&&focus.day===todayKey()?focus:null;$('focusTxt').textContent=f?f.t:'Ainda não definida.';$('focusTxt').parentElement.classList.toggle('done',!!(f&&f.done));$('focusDone').hidden=!f;
@@ -1085,14 +1133,14 @@ function openChat(){openHub('hoje');setTimeout(()=>$('typeInput').focus(),80)}
 function showNotes(){openHub('notas')}
 
 /* Gavetas */
-function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('voiceEngine').value=store.get('voiceEngine','pantera');$('oaVoice').value=store.get('oaVoice','onyx');$('voiceStyle').value=store.get('voiceStyle','pantera');buildVoices();$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
+function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('voiceEngine').value=store.get('voiceEngine','pantera');$('oaVoice').value=store.get('oaVoice','onyx');$('voiceStyle').value=store.get('voiceStyle','pantera');buildVoices();$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('calUrl').value=store.get('calUrl','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
 $('btnChat').addEventListener('click',()=>openHub('hoje'));$('aiThumb').addEventListener('click',()=>openHub('hoje'));$('aiTitle').addEventListener('click',()=>openHub('hoje'));
 $('btnNotes').addEventListener('click',showNotes);$('appNotes').addEventListener('click',showNotes);$('appSettings').addEventListener('click',openSettings);
 document.querySelectorAll('.drawer').forEach(d=>d.addEventListener('click',e=>{if(e.target===d||e.target.closest('[data-close]'))d.hidden=true}));
 addEventListener('keydown',e=>{if(e.key==='Escape'){$('imgview').hidden=true;document.querySelectorAll('.drawer').forEach(d=>d.hidden=true);$('hub').hidden=true}});
 $('compose').addEventListener('submit',e=>{e.preventDefault();const v=$('typeInput').value.trim();if(!v)return;$('typeInput').value='';ask(v)});
 $('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('voiceEngine',$('voiceEngine').value);store.set('oaVoice',$('oaVoice').value||'onyx');store.set('voiceStyle',$('voiceStyle').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
-  store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.';vaultSave()});
+  store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());store.set('calUrl',$('calUrl').value.trim());cal.at=0;calEnsure(true);if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.';vaultSave()});
 $('btnClear').addEventListener('click',()=>{history=[];store.set('history',[]);render();$('settings').hidden=true});
 $('btnClearNotes').addEventListener('click',()=>{notes=[];store.set('notes',[]);$('settings').hidden=true});
 
