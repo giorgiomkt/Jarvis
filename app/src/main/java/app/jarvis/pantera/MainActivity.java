@@ -379,7 +379,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void stopListen() { ui.post(() -> { if (recognizer != null) recognizer.stopListening(); }); }
         @JavascriptInterface public void open(String url) { openExternal(url); }
         @JavascriptInterface public void setPlaylist(String link) { prefs.edit().putString("playlist", link == null ? "" : link).apply(); }
-        @JavascriptInterface public void playPlaylist() { ui.post(() -> playPlaylist(false)); }
+        @JavascriptInterface public void playPlaylist() { ui.post(() -> MainActivity.this.playPlaylist(false)); }
         @JavascriptInterface public void mediaStart() { ui.post(MainActivity.this::mediaStart); }
         @JavascriptInterface public void mediaCmd(String c) { ui.post(() -> MainActivity.this.mediaCmd(c)); }
         @JavascriptInterface public void requestMediaAccess() {
