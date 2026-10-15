@@ -509,7 +509,7 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
       </div>
       <div class="two">
         <div class="f"><label for="voiceEngine">Voz da Pantera</label><select id="voiceEngine"><option value="pantera">Pantera · voz neural (OpenAI)</option><option value="device">Voz do aparelho</option></select></div>
-        <div class="f"><label for="voiceStyle">Personalidade da voz</label><select id="voiceStyle"><option value="pantera">Pantera · grave, calma, predadora</option><option value="jarvis">Jarvis · elegante, preciso, mordomo de elite</option><option value="italiano">Italiano · charme e calor, sangue quente</option><option value="locutor">Locutor · grave de rádio, presença total</option><option value="comandante">Comandante · firme, curto, autoridade</option></select></div>
+        <div class="f"><label for="voiceStyle">Personalidade da voz</label><select id="voiceStyle"><option value="pantera">Pantera · grave, calma, predadora</option><option value="jarvis">Jarvis · IA mordomo de elite, sereno e irônico</option><option value="italiano">Italiano · charme e calor, sangue quente</option><option value="locutor">Locutor · grave de rádio, presença total</option><option value="comandante">Comandante · firme, curto, autoridade</option></select></div>
       </div>
       <div class="f"><label>Timbre · toque para ouvir</label><input type="hidden" id="oaVoice"><div class="voices" id="voices"></div><small id="voiceMsg">Toque em um timbre: ele fala na hora e fica selecionado. Depois, Salvar.</small></div>
       <div class="f"><label>Vozes do aparelho · funcionam sem internet</label><div class="voices" id="devVoices"></div></div>
@@ -972,7 +972,7 @@ const NATIVE=window.Native||null;
 window.__nSpeak=ev=>{if(ev==='start')setPhase('speaking');else{setPhase(null);$('live').textContent=''}};
 const PERSONA_VOICE={
   pantera:"Você é a Pantera: voz masculina grave, baixa e encorpada, levemente rouca, calma e poderosa como um predador em repouso. Confiante, magnética, calorosa, com pausas intencionais e ritmo sem pressa.",
-  jarvis:"Você é o Jarvis: voz masculina refinada e precisa, culta, serena e levemente irônica, como um mordomo de elite que sabe tudo. Dicção impecável, ritmo seguro, sorriso na voz.",
+  jarvis:"Você é o Jarvis, uma inteligência artificial de mordomo de elite: voz masculina madura, culta e serena, dicção impecável e levemente formal, tom calmo mesmo sob pressão, com um humor seco e sutil, sempre um passo à frente. Fala como quem administra uma mansão e um arsenal ao mesmo tempo: polido, preciso, discreto, com pausas elegantes. Trata o Giorgio com respeito e leve ironia.",
   italiano:"Você é um sócio italiano radicado no Brasil: voz masculina quente e charmosa, expressiva, com energia e paixão, falando português do Brasil impecável, sem sotaque, apenas o calor italiano no jeito.",
   locutor:"Você é um locutor brasileiro de rádio FM premium: voz masculina muito grave e encorpada, ressonante, peito aberto, articulação perfeita, ritmo firme e envolvente, presença que enche o carro.",
   comandante:"Você é um comandante: voz masculina firme e grave, frases curtas, autoridade calma, zero hesitação, transmite segurança total."};
