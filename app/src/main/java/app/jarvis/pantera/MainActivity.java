@@ -37,6 +37,7 @@ import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -63,6 +64,7 @@ public class MainActivity extends Activity {
     private static boolean autoplayedThisBoot = false;
 
     private WebView web;
+    private boolean safe = false;
     private TextToSpeech tts;
     private boolean ttsReady = false;
     private SpeechRecognizer recognizer;
@@ -80,15 +82,21 @@ public class MainActivity extends Activity {
     @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        safe = getIntent() != null && getIntent().getBooleanExtra("safe", false);
+        Diag.stage(this, "Main.onCreate" + (safe ? " (modo seguro)" : ""));
         prefs = getSharedPreferences("jarvis", MODE_PRIVATE);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        Diag.stage(this, "Main: tela cheia");
         immersive();
+        Diag.stage(this, "Main: asset loader");
 
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
                 .build();
 
+        Diag.stage(this, "Main: criando WebView");
         web = new WebView(this);
+        Diag.stage(this, "Main: WebView criada");
         web.setBackgroundColor(0xFF000000);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -112,6 +120,12 @@ public class MainActivity extends Activity {
                 openExternal(u.toString());
                 return true;
             }
+            @Override public void onPageFinished(WebView v, String url) { Diag.stage(MainActivity.this, "Main: painel carregado"); }
+            @Override public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail d) {
+                Diag.stage(MainActivity.this, "Main: renderizador da WebView caiu (crash=" + d.didCrash() + ")");
+                finish();
+                return true;
+            }
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override public void onPermissionRequest(final PermissionRequest request) {
@@ -123,10 +137,15 @@ public class MainActivity extends Activity {
         });
         web.addJavascriptInterface(new Bridge(), "Native");
         setContentView(web);
+        Diag.stage(this, "Main: carregando painel");
         web.loadUrl(HOST);
 
+        if (safe) { Diag.stage(this, "Main: modo seguro, sem voz/permissões/automações"); return; }
+        Diag.stage(this, "Main: permissões");
         askPermissions();
+        Diag.stage(this, "Main: voz (TTS)");
         initTts();
+        Diag.stage(this, "Main: init completo");
 
         if (!autoplayedThisBoot) {
             autoplayedThisBoot = true;
@@ -152,7 +171,8 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        if (msm == null && mediaAccess()) ui.postDelayed(this::mediaStart, 300);
+        Diag.stage(this, "Main.onResume");
+        if (!safe && msm == null && mediaAccess()) ui.postDelayed(this::mediaStart, 300);
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
@@ -380,7 +400,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void open(String url) { openExternal(url); }
         @JavascriptInterface public void setPlaylist(String link) { prefs.edit().putString("playlist", link == null ? "" : link).apply(); }
         @JavascriptInterface public void playPlaylist() { ui.post(() -> MainActivity.this.playPlaylist(false)); }
-        @JavascriptInterface public void mediaStart() { ui.post(MainActivity.this::mediaStart); }
+        @JavascriptInterface public void mediaStart() { if (!safe) ui.post(MainActivity.this::mediaStart); }
         @JavascriptInterface public void mediaCmd(String c) { ui.post(() -> MainActivity.this.mediaCmd(c)); }
         @JavascriptInterface public void requestMediaAccess() {
             try { startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception ignored) { }
