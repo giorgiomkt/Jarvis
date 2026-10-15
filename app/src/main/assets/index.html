@@ -303,6 +303,23 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
 @keyframes splashIn{from{opacity:0;letter-spacing:1.1em}to{opacity:1}}
 @keyframes splashLine{to{width:360px}}
 @keyframes splashOut{to{opacity:0;visibility:hidden}}
+#imgview{position:absolute;inset:0;z-index:45;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:40px 60px;animation:hubIn .3s ease-out}
+.iv-frame{position:relative;width:min(1200px,100%);height:640px;display:grid;place-items:center}
+.iv-frame img{max-width:100%;max-height:640px;border-radius:14px;box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 50%,transparent),0 0 60px -10px var(--glow);animation:ivIn .6s ease-out}
+@keyframes ivIn{from{opacity:0;filter:blur(18px);transform:scale(.97)}to{opacity:1;filter:none;transform:none}}
+.iv-wait{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;border-radius:14px;border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);
+  background:linear-gradient(110deg,#0b0b0d 20%,color-mix(in srgb,var(--accent) 14%,#0b0b0d) 40%,#0b0b0d 60%);background-size:250% 100%;animation:shim 1.8s linear infinite}
+@keyframes shim{to{background-position:-250% 0}}
+.iv-eye{width:150px;height:56px;border-radius:50%;background:radial-gradient(closest-side,#fff3c4,var(--accent) 45%,transparent 75%);box-shadow:0 0 50px var(--glow);animation:pulse 1.2s ease-in-out infinite;position:relative}
+.iv-eye::after{content:"";position:absolute;left:50%;top:6px;bottom:6px;width:9px;margin-left:-4px;border-radius:50%;background:#000}
+.iv-wait b{font-family:var(--hud);font-weight:400;font-size:20px;letter-spacing:.6em;padding-left:.6em;color:var(--accent)}
+.iv-wait small{font-size:16px;color:var(--dim);font-variant-numeric:tabular-nums}
+.iv-bar{width:min(1200px,100%);display:flex;align-items:center;gap:20px}
+.iv-bar p{flex:1;font-size:18px;color:#d9d4cd;line-height:1.4;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.iv-strip{width:min(1200px,100%);display:flex;gap:12px;overflow-x:auto}
+.iv-strip img{height:90px;border-radius:8px;cursor:pointer;opacity:.75;flex:none}
+.iv-strip img:hover{opacity:1}
+.m .thumbimg{max-width:100%;border-radius:10px;margin-top:4px;cursor:pointer;box-shadow:0 0 0 1px var(--hair)}
 </style>
 </head>
 <body data-mode="conforto">
@@ -383,6 +400,11 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
       <div class="tab" data-pane="notas" hidden><ul class="allnotes" id="allNotes"></ul></div>
     </div>
   </section>
+  <section id="imgview" hidden aria-label="Imagem da Pantera">
+    <div class="iv-frame" id="ivFrame"><div class="iv-wait" id="ivWait"><span class="iv-eye"></span><b>CRIANDO</b><small id="ivTimer">0 s</small></div><img id="ivImg" alt=""></div>
+    <div class="iv-bar"><p id="ivCap"></p><div class="row"><button class="pill ghost" id="ivGallery">Galeria</button><button class="pill ghost" id="ivSave">Salvar</button><button class="pill" id="ivClose">Fechar</button></div></div>
+    <div class="iv-strip" id="ivStrip" hidden></div>
+  </section>
   <div id="intro" hidden><canvas id="introCv" width="1672" height="941"></canvas></div>
   <section class="dock">
     <div class="card nav">
@@ -428,6 +450,10 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
   <div class="panel">
     <header><h2>AJUSTES</h2><button class="x" data-close aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
     <div class="scroll">
+      <div class="two">
+        <div class="f"><label for="oaKey">Chave da API OpenAI (imagens)</label><input id="oaKey" type="password" placeholder="sk-…" autocomplete="off"><small>Criada em platform.openai.com. Cobrança por imagem, à parte do ChatGPT.</small></div>
+        <div class="f"><label for="imgModel">Modelo de imagem</label><select id="imgModel"><option value="gpt-image-2">GPT Image 2</option><option value="gpt-image-1">GPT Image 1</option></select></div>
+      </div>
       <div class="f"><label for="apiKey">Chave da API Anthropic</label><input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"><small>Gerada em console.anthropic.com. Fica salva só neste aparelho.</small></div>
       <div class="two">
         <div class="f"><label for="model">Cérebro</label><select id="model"><option value="claude-sonnet-5-5">Sonnet 5.5 · rápido</option><option value="claude-opus-5-5">Opus 5.5 · profundo</option><option value="claude-haiku-5-5">Haiku 5.5 · leve</option></select></div>
@@ -752,6 +778,7 @@ function render(){const feed=$('feed');feed.innerHTML='';
   if(!history.some(m=>!(m.role==='user'&&m.content.startsWith('[PARTIDA]')))){const e=document.createElement('div');e.className='empty2';e.style.margin='auto 0';e.innerHTML='<b style="display:block;font-size:22px;color:var(--ink);margin-bottom:10px">Estou aqui, Giorgio.</b>Empresas, rotina, decisões, ideias. Toque no microfone e fale, ou escolha um atalho ao lado.';feed.appendChild(e)}
   history.filter(m=>!(m.role==='user'&&m.content.startsWith('[PARTIDA]'))).slice(-40).forEach(m=>{const d=document.createElement('div');d.className='m '+(m.note?'note ai':m.role==='user'?'me':'ai');
     const w=document.createElement('span');w.className='who';w.textContent=m.note?'Notas':m.role==='user'?'Giorgio':'Pantera';d.appendChild(w);
+    if(m.img){const im=document.createElement('img');im.className='thumbimg';im.alt='Imagem criada';imgGet(m.img).then(u=>{if(u)im.src=u});im.onclick=()=>showImage(m.img);d.appendChild(im);feed.appendChild(d);return}
     m.content.split(/\n+/).forEach(l=>{if(!l.trim())return;const p=document.createElement('p');p.textContent=l;d.appendChild(p)});feed.appendChild(d)});
   feed.scrollTop=feed.scrollHeight;
   const last=[...history].reverse().find(m=>m.role==='assistant'&&!m.note);if(last)$('aiLine').textContent=last.content.split('\n')[0];
@@ -762,7 +789,7 @@ function systemPrompt(){
   const n=notes.length?notes.slice(-30).map(x=>'- '+x.d+': '+x.t).join('\n'):'(nenhuma nota ainda)';
   const hh=t=>new Date(t).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   const car=obd.live?`\nCARRO (leitura OBD das ${hh(tel.at)}): ${Math.round(tel.spd)} km/h, ${Math.round(tel.rpm)} rpm, motor ${tel.clt==null?'indisponível':tel.clt+'°C'}, tanque ${tel.fuel==null?'indisponível':Math.round(tel.fuel)+'%'}, pneus ${Object.values(tel.tires).some(v=>v!=null)?Object.entries(tel.tires).map(([k,v])=>k+' '+(v==null?'?':Math.round(v)+' lb')).join(', '):'sem sensor'}, alertas ${tel.dtc==null?'não lidos':tel.dtc.length?tel.dtc.join(', '):'nenhum'}.`:'\nCARRO: OBD desconectado. Não há telemetria do motor; velocidade aproximada por GPS '+Math.round(tel.spd)+' km/h. Nunca invente leituras.';
-  const tools='\nAÇÕES DISPONÍVEIS: para levar ele a um lugar, termine a resposta com [[NAV: endereço ou nome do lugar]] e diga que é só tocar para confirmar. Para tocar música, termine com [[MUSICA: nome da playlist, artista ou faixa]]. Você não envia mensagens, não compra e não altera agenda: para isso, diga o que faria e peça que ele faça.';
+  const tools='\nAÇÕES DISPONÍVEIS: para criar uma imagem que ele pedir, diga em uma frase curta o que vai criar e termine com [[IMAGEM: formato | prompt]], onde formato é quadrado, horizontal ou vertical e o prompt é detalhado, em inglês, com estilo, luz, composição e cores; se a imagem tiver texto escrito, mantenha o texto em português entre aspas. '+(store.get('oaKey','')?'':'(A chave da OpenAI ainda não foi configurada: avise que ele precisa colocar em Config.) ')+'Também, para levar ele a um lugar, termine a resposta com [[NAV: endereço ou nome do lugar]] e diga que é só tocar para confirmar. Para tocar música, termine com [[MUSICA: nome da playlist, artista ou faixa]]. Você não envia mensagens, não compra e não altera agenda: para isso, diga o que faria e peça que ele faça.';
   return store.get('persona',DEFAULT_PERSONA)+'\n\nO carro é um Jaguar F-TYPE P300 preto que ele chama de Batmóvel.\nAGORA: '+when+'.'+car+tools+'\n'+MODE_TONE[mode]+'\nROTINA DE HOJE: '+(habits.length?habits.map(x=>x.n+(x.log&&x.log.includes(todayKey())?' (feito)':' (pendente)')+(streak(x)?', sequência '+streak(x):'')).join('; '):'nenhum hábito cadastrado')+'.\nPRIORIDADE DO DIA: '+(focus&&focus.day===todayKey()?focus.t+(focus.done?' (concluída)':''):'não definida')+'.\nPara definir a prioridade do dia, termine com [[FOCO: frase curta]]. Quando uma nota for de uma empresa, comece a nota com o nome dela, ex.: [[NOTA: Aura: ...]].\nNOTAS SALVAS:\n'+n;
 }
 function extractNotes(text){const found=[];const clean=text.replace(/\[\[NOTA:\s*([^\]]+)\]\]/g,(_,t)=>{found.push(t.trim());return''}).replace(/\n{3,}/g,'\n\n').trim();
@@ -777,13 +804,13 @@ async function ask(q){
   if(busy)return;const key=store.get('apiKey','');if(!key){openSettings();return}
   if(/modo f[uú]ria/i.test(q))setMode('furia','voz');else if(/modo sport/i.test(q))setMode('sport','voz');
   busy=true;history.push({role:'user',content:q});render();setPhase('thinking');$('live').textContent='';$('aiLine').textContent='Pensando…';
-  const msgs=history.filter(m=>!m.note).slice(-16).map(m=>({role:m.role,content:m.content}));
+  const msgs=history.filter(m=>!m.note&&!m.img).slice(-16).map(m=>({role:m.role,content:m.content}));
   try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:store.get('model','claude-sonnet-5-5'),max_tokens:600,system:systemPrompt(),messages:msgs})});
     const data=await r.json();if(!r.ok)throw new Error((data.error&&data.error.message)||('HTTP '+r.status));
     const raw=(data.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('\n').trim()||'Silêncio na linha. Tenta de novo.';
-    const{clean:c00,count}=extractNotes(raw);const c0=c00.replace(/\[\[FOCO:\s*([^\]]+)\]\]/g,(_,t)=>{focus={day:todayKey(),t:t.trim(),done:false};store.set('focus',focus);return''}).trim();const clean=extractActions(c0);history.push({role:'assistant',content:clean});store.set('history',history.slice(-60));render();if(!$('hub').hidden)renderHub();
-    if(count)$('live').textContent=count>1?count+' notas salvas':'Nota salva';speak(clean);
+    const{clean:c00,count}=extractNotes(raw);const c0=c00.replace(/\[\[FOCO:\s*([^\]]+)\]\]/g,(_,t)=>{focus={day:todayKey(),t:t.trim(),done:false};store.set('focus',focus);return''}).trim();let imgReq=null;const c1=c0.replace(/\[\[IMAGEM:\s*([^\]]+)\]\]/g,(_,t)=>{const i=t.indexOf('|');imgReq=i>0?{fmt:t.slice(0,i).trim().toLowerCase(),prompt:t.slice(i+1).trim()}:{fmt:'horizontal',prompt:t.trim()};return''}).trim();const clean=extractActions(c1);history.push({role:'assistant',content:clean});store.set('history',history.slice(-60));render();if(!$('hub').hidden)renderHub();
+    if(count)$('live').textContent=count>1?count+' notas salvas':'Nota salva';speak(clean);if(imgReq)genImage(imgReq.fmt,imgReq.prompt,clean);
   }catch(e){history.pop();render();setPhase(null);$('aiLine').textContent=/401|auth|x-api-key/i.test(e.message)?'Chave da API inválida. Abra Config.':/fetch|network/i.test(e.message)?'Sem internet no momento.':'Erro: '+e.message.slice(0,60)}
   finally{busy=false}}
 
@@ -818,6 +845,40 @@ function listen(){if(busy)return;
   rec.onend=()=>{listening=false;const q=fin.trim();if(q)ask(q);else setPhase(null)};
   try{rec.start()}catch(e){}}
 $('hero').addEventListener('click',listen);$('btnMic').addEventListener('click',listen);
+
+/* Imagens: a Pantera cria e mostra na tela */
+let idb=null;
+function db(){return idb||(idb=new Promise((res,rej)=>{try{const r=indexedDB.open('pantera-img',1);r.onupgradeneeded=()=>r.result.createObjectStore('img');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}}))}
+async function imgPut(id,dataUrl){try{const d=await db();await new Promise(r=>{const t=d.transaction('img','readwrite');t.objectStore('img').put(dataUrl,id);t.oncomplete=r;t.onerror=r})}catch(e){}
+  let ids=store.get('imgIds',[]);ids.push(id);if(ids.length>12){const old=ids.shift();try{const d=await db();d.transaction('img','readwrite').objectStore('img').delete(old)}catch(e){}}store.set('imgIds',ids)}
+const memImg={};
+async function imgGet(id){if(memImg[id])return memImg[id];try{const d=await db();return await new Promise(r=>{const q=d.transaction('img').objectStore('img').get(id);q.onsuccess=()=>r(q.result||null);q.onerror=()=>r(null)})}catch(e){return null}}
+let ivTick=null,curImg=null;
+function ivOpen(){$('imgview').hidden=false}
+$('ivClose').addEventListener('click',()=>{$('imgview').hidden=true;clearInterval(ivTick)});
+$('ivSave').addEventListener('click',async()=>{if(!curImg)return;const u=await imgGet(curImg);if(!u)return;
+  if(NATIVE&&NATIVE.saveImage){try{NATIVE.saveImage(u.split(',')[1]);$('ivCap').textContent='Salva na galeria do aparelho, pasta JARVIS.'}catch(e){}return}
+  const a=document.createElement('a');a.href=u;a.download='pantera-'+curImg+'.png';document.body.appendChild(a);a.click();a.remove()});
+$('ivGallery').addEventListener('click',async()=>{const s=$('ivStrip');if(!s.hidden){s.hidden=true;return}s.innerHTML='';const ids=store.get('imgIds',[]).slice().reverse();
+  if(!ids.length){$('ivCap').textContent='Nenhuma imagem ainda.';return}for(const id of ids){const u=await imgGet(id);if(!u)continue;const im=document.createElement('img');im.src=u;im.alt='';im.onclick=()=>showImage(id);s.appendChild(im)}s.hidden=false});
+async function showImage(id){const u=await imgGet(id);if(!u)return;curImg=id;$('ivWait').hidden=true;$('ivImg').hidden=false;$('ivImg').src=u;$('ivCap').textContent=(history.find(m=>m.img===id)||{}).content||'';ivOpen()}
+async function genImage(fmt,prompt,caption){
+  const key=store.get('oaKey','');if(!key){$('aiLine').textContent='Para criar imagens, coloque a chave da OpenAI em Config.';return}
+  const size=/vert/.test(fmt)?'1024x1536':/quad/.test(fmt)?'1024x1024':'1536x1024';
+  const [w,hh]=size.split('x').map(Number);$('ivFrame').style.aspectRatio=w+'/'+hh;$('ivFrame').style.height='640px';$('ivFrame').style.width='auto';
+  $('ivImg').hidden=true;$('ivWait').hidden=false;$('ivCap').textContent=caption||'';$('ivStrip').hidden=true;curImg=null;ivOpen();
+  const t0=Date.now();clearInterval(ivTick);ivTick=setInterval(()=>{$('ivTimer').textContent=Math.round((Date.now()-t0)/1000)+' s'},500);
+  async function call(model,sz){const r=await fetch('https://api.openai.com/v1/images/generations',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},
+      body:JSON.stringify({model,prompt,size:sz,n:1,quality:'medium'})});const d=await r.json();if(!r.ok)throw new Error((d.error&&d.error.message)||('HTTP '+r.status));return d}
+  try{let d,model=store.get('imgModel','gpt-image-2');
+    try{d=await call(model,size)}catch(e){if(/size/i.test(e.message))d=await call(model,'auto');else if(/model/i.test(e.message)&&model!=='gpt-image-1')d=await call('gpt-image-1',size);else throw e}
+    const it=d.data&&d.data[0];const url=it&&it.b64_json?'data:image/png;base64,'+it.b64_json:it&&it.url;if(!url)throw new Error('resposta sem imagem');
+    const id='i'+Date.now();memImg[id]=url;imgPut(id,url);curImg=id;
+    history.push({role:'assistant',content:caption||'Imagem criada.',img:id});store.set('history',history.slice(-60));render();
+    $('ivWait').hidden=true;$('ivImg').hidden=false;$('ivImg').src=url;$('aiLine').textContent='Imagem pronta.';
+  }catch(e){$('ivWait').hidden=true;$('ivCap').textContent=/401|invalid_api_key|Incorrect API key/i.test(e.message)?'Chave da OpenAI inválida. Confira em Config.':/fetch|network/i.test(e.message)?'Sem internet para criar a imagem.':/safety|policy|moderation/i.test(e.message)?'Esse pedido foi recusado pela OpenAI. Tente descrever de outro jeito.':'Não consegui criar: '+e.message.slice(0,90)}
+  finally{clearInterval(ivTick)}}
+$('ivImg').hidden=true;
 
 /* Pantera: espaço interno */
 const COMPANIES=[
@@ -873,13 +934,13 @@ function openChat(){openHub('hoje');setTimeout(()=>$('typeInput').focus(),80)}
 function showNotes(){openHub('notas')}
 
 /* Gavetas */
-function openSettings(){$('apiKey').value=store.get('apiKey','');$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
+function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
 $('btnChat').addEventListener('click',()=>openHub('hoje'));$('aiThumb').addEventListener('click',()=>openHub('hoje'));$('aiTitle').addEventListener('click',()=>openHub('hoje'));
 $('btnNotes').addEventListener('click',showNotes);$('appNotes').addEventListener('click',showNotes);$('appSettings').addEventListener('click',openSettings);
 document.querySelectorAll('.drawer').forEach(d=>d.addEventListener('click',e=>{if(e.target===d||e.target.closest('[data-close]'))d.hidden=true}));
-addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.drawer').forEach(d=>d.hidden=true);$('hub').hidden=true}});
+addEventListener('keydown',e=>{if(e.key==='Escape'){$('imgview').hidden=true;document.querySelectorAll('.drawer').forEach(d=>d.hidden=true);$('hub').hidden=true}});
 $('compose').addEventListener('submit',e=>{e.preventDefault();const v=$('typeInput').value.trim();if(!v)return;$('typeInput').value='';ask(v)});
-$('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.trim());store.set('model',$('model').value);store.set('voice',$('voiceName').value);
+$('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
   store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.'});
 $('btnClear').addEventListener('click',()=>{history=[];store.set('history',[]);render();$('settings').hidden=true});
 $('btnClearNotes').addEventListener('click',()=>{notes=[];store.set('notes',[]);$('settings').hidden=true});

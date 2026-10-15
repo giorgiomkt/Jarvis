@@ -7,6 +7,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.ContentValues;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.net.Uri;
@@ -14,7 +15,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.provider.Settings;
+import android.util.Base64;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -288,6 +291,19 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void open(String url) { openExternal(url); }
         @JavascriptInterface public void setPlaylist(String link) { prefs.edit().putString("playlist", link == null ? "" : link).apply(); }
         @JavascriptInterface public void playPlaylist() { ui.post(() -> playPlaylist(false)); }
+        @JavascriptInterface public boolean saveImage(String b64) {
+            try {
+                byte[] png = Base64.decode(b64, Base64.DEFAULT);
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.Images.Media.DISPLAY_NAME, "pantera-" + System.currentTimeMillis() + ".png");
+                v.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+                if (Build.VERSION.SDK_INT >= 29) v.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/JARVIS");
+                Uri u = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+                if (u == null) return false;
+                try (java.io.OutputStream o = getContentResolver().openOutputStream(u)) { if (o == null) return false; o.write(png); }
+                return true;
+            } catch (Exception e) { return false; }
+        }
     }
 
     @Override public void onBackPressed() {
