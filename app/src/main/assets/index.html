@@ -893,7 +893,7 @@ async function neuralSpeak(text,voice,style){
   const instructions=VOICE_STYLE.base0+' '+(PERSONA_VOICE[style||store.get('voiceStyle','pantera')]||PERSONA_VOICE.pantera)+' Nunca robótica, nunca de locutor de rádio. Palavras em italiano como andiamo e allora saem naturais.'+(mode==='sport'?' '+VOICE_STYLE.sport:mode==='furia'?' '+VOICE_STYLE.furia:'');
   const call=model=>fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},
     body:JSON.stringify({model,voice:voice||store.get('oaVoice','onyx'),input:text.slice(0,3800),instructions,response_format:'mp3',speed:mode==='furia'||mode==='sport'?1.05:0.97})});
-  let r=await call('gpt-4o-mini-tts');if(!r.ok&&r.status===404)r=await call('tts-1-hd');if(!r.ok&&r.status===400){const t=await r.text();throw new Error(/voice/i.test(t)?'timbre indisponível na sua conta':'tts 400')}if(!r.ok)throw new Error('tts '+r.status);
+  let r=await call('gpt-4o-mini-tts');if(!r.ok&&r.status===404)r=await call('tts-1-hd');if(!r.ok){const t=await r.text().catch(()=>'');if(r.status===429&&/quota|billing|credit/i.test(t))throw new Error('SEM_CREDITO');if(r.status===401)throw new Error('CHAVE');if(r.status===400&&/voice/i.test(t))throw new Error('timbre indisponível na sua conta');throw new Error('erro '+r.status)}if(!r.ok)throw new Error('tts '+r.status);
   const url=URL.createObjectURL(await r.blob());if(curAudio){curAudio.pause()}const a=new Audio(url);curAudio=a;
   a.onplay=()=>setPhase('speaking');a.onended=a.onerror=()=>{setPhase(null);$('live').textContent='';URL.revokeObjectURL(url);document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'))};
   await a.play();
@@ -1049,7 +1049,7 @@ $('appMusic').addEventListener('click',e=>{const pl=store.get('playlist','');if(
 if(NATIVE&&store.get('playlist',''))try{NATIVE.setPlaylist(store.get('playlist',''))}catch(e){}
 
 const VOICES=[['onyx','Onyx','grave e profundo'],['cedar','Cedar','encorpado, natural'],['ash','Ash','firme e seco'],['ballad','Ballad','elegante, suave'],['echo','Echo','direto, sóbrio'],['verse','Verse','expressivo'],['fable','Fable','narrador, caloroso'],['sage','Sage','calmo, sereno'],['alloy','Alloy','neutro, claro'],['marin','Marin','natural, leve'],['coral','Coral','vivo, aberto'],['nova','Nova','brilhante']];
-const SAMPLE='Buongiorno, Giorgio. Motor ligado, cabeça fria. Me diz qual é a jogada de hoje, que eu cuido do resto.';
+const SAMPLE='Oi, eu sou o Jarvis, apelidado como Pantera Negra. Irei te ajudar para sempre.';
 function buildVoices(){const box=$('voices');box.innerHTML='';const cur=$('oaVoice').value||store.get('oaVoice','onyx');
   VOICES.forEach(([id,n,d])=>{const b=document.createElement('button');b.type='button';b.className='vc'+(id===cur?' on':'');b.dataset.v=id;
     b.innerHTML='<i>▶</i><span><b></b><small></small></span>';b.querySelector('b').textContent=n;b.querySelector('small').textContent=d;
@@ -1058,7 +1058,8 @@ async function previewVoice(id,btn){$('oaVoice').value=id;document.querySelector
   const key=$('oaKey').value.trim();if(key)store.set('oaKey',key);
   if(!key){$('voiceMsg').textContent='Cole a chave da OpenAI acima para ouvir os timbres.';return}
   document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'));btn&&btn.classList.add('playing');$('voiceMsg').textContent='Gerando a amostra…';
-  try{await neuralSpeak(SAMPLE,id,$('voiceStyle').value);$('voiceMsg').textContent='Tocando: '+id+'. Gostou? Toque em Salvar.'}catch(e){btn&&btn.classList.remove('playing');$('voiceMsg').textContent='Não consegui tocar essa voz ('+e.message+').'}}
+  try{await neuralSpeak(SAMPLE,id,$('voiceStyle').value);$('voiceMsg').textContent='Tocando: '+id+'. Gostou? Toque em Salvar.'}catch(e){btn&&btn.classList.remove('playing');const m=e.message;$('voiceMsg').textContent=m==='SEM_CREDITO'?'A conta da OpenAI está sem crédito. Adicione crédito em platform.openai.com › Billing e toque de novo.':m==='CHAVE'?'A chave da OpenAI foi recusada. Confira se colou inteira.':/Failed to fetch|NetworkError|Load failed/i.test(m)?'Sem acesso à internet aqui. Abra o pantera.html direto no Chrome (a prévia dentro do Claude bloqueia a conexão).':'Não consegui tocar essa voz ('+m+').';
+    deviceSpeak(SAMPLE)}}
 $('voiceStyle').addEventListener('change',()=>{const id=$('oaVoice').value||'onyx';previewVoice(id,document.querySelector('.vc[data-v="'+id+'"]'))});
 
 /* Backup */
