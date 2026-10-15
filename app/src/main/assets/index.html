@@ -509,7 +509,7 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
       </div>
       <div class="two">
         <div class="f"><label for="voiceEngine">Voz da Pantera</label><select id="voiceEngine"><option value="pantera">Pantera · voz neural (OpenAI)</option><option value="device">Voz do aparelho</option></select></div>
-        <div class="f"><label for="voiceStyle">Personalidade da voz</label><select id="voiceStyle"><option value="pantera">Pantera · grave, calma, predadora</option><option value="jarvis">Jarvis · elegante, preciso, mordomo de elite</option><option value="italiano">Italiano · charme e calor, sangue quente</option><option value="comandante">Comandante · firme, curto, autoridade</option></select></div>
+        <div class="f"><label for="voiceStyle">Personalidade da voz</label><select id="voiceStyle"><option value="pantera">Pantera · grave, calma, predadora</option><option value="jarvis">Jarvis · elegante, preciso, mordomo de elite</option><option value="italiano">Italiano · charme e calor, sangue quente</option><option value="locutor">Locutor · grave de rádio, presença total</option><option value="comandante">Comandante · firme, curto, autoridade</option></select></div>
       </div>
       <div class="f"><label>Timbre · toque para ouvir</label><input type="hidden" id="oaVoice"><div class="voices" id="voices"></div><small id="voiceMsg">Toque em um timbre: ele fala na hora e fica selecionado. Depois, Salvar.</small></div>
       <div class="f"><label>Vozes do aparelho · funcionam sem internet</label><div class="voices" id="devVoices"></div></div>
@@ -974,9 +974,10 @@ const PERSONA_VOICE={
   pantera:"Você é a Pantera: voz masculina grave, baixa e encorpada, levemente rouca, calma e poderosa como um predador em repouso. Confiante, magnética, calorosa, com pausas intencionais e ritmo sem pressa.",
   jarvis:"Você é o Jarvis: voz masculina refinada e precisa, culta, serena e levemente irônica, como um mordomo de elite que sabe tudo. Dicção impecável, ritmo seguro, sorriso na voz.",
   italiano:"Você é um sócio italiano radicado no Brasil: voz masculina quente e charmosa, expressiva, com energia e paixão, falando português do Brasil impecável, sem sotaque, apenas o calor italiano no jeito.",
+  locutor:"Você é um locutor brasileiro de rádio FM premium: voz masculina muito grave e encorpada, ressonante, peito aberto, articulação perfeita, ritmo firme e envolvente, presença que enche o carro.",
   comandante:"Você é um comandante: voz masculina firme e grave, frases curtas, autoridade calma, zero hesitação, transmite segurança total."};
 const VOICE_STYLE={
-  base0:"Fale em português do Brasil, com pronúncia brasileira nativa e natural, sem nenhum sotaque estrangeiro.",
+  base0:"Fale em português do Brasil, como um homem brasileiro nativo de Recife ou São Paulo: pronúncia brasileira perfeita, sem nenhum sotaque estrangeiro, sem soar português de Portugal. Voz masculina, grave e forte.",
   sport:"Mais energia e mais ritmo, firme e cortante, como um motor subindo de giro.",
   furia:"Modo fúria: voz ainda mais grave e intensa, quase um rosnado contido, frases curtas e cortantes, autoridade total, sem gritar."};
 let curAudio=null;
@@ -993,7 +994,7 @@ function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;
 ['pointerdown','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,unlockAudio,{capture:true,passive:true}));
 async function neuralSpeak(text,voice,style){
   const key=store.get('oaKey','');if(!key)throw new Error('sem chave');
-  const instructions=VOICE_STYLE.base0+' '+(PERSONA_VOICE[style||store.get('voiceStyle','pantera')]||PERSONA_VOICE.pantera)+' Nunca robótica, nunca de locutor de rádio. Palavras em italiano como andiamo e allora saem naturais.'+(mode==='sport'?' '+VOICE_STYLE.sport:mode==='furia'?' '+VOICE_STYLE.furia:'');
+  const instructions=VOICE_STYLE.base0+' '+(PERSONA_VOICE[style||store.get('voiceStyle','pantera')]||PERSONA_VOICE.pantera)+' Nunca robótica, nunca caricata. Palavras em italiano como andiamo e allora saem naturais.'+(mode==='sport'?' '+VOICE_STYLE.sport:mode==='furia'?' '+VOICE_STYLE.furia:'');
   const call=model=>fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},
     body:JSON.stringify({model,voice:voice||store.get('oaVoice','onyx'),input:text.slice(0,3800),instructions,response_format:'mp3',speed:mode==='furia'||mode==='sport'?1.05:0.97})});
   let r=await call('gpt-4o-mini-tts');if(!r.ok&&r.status===404)r=await call('tts-1-hd');if(!r.ok){const t=await r.text().catch(()=>'');if(r.status===429&&/quota|billing|credit/i.test(t))throw new Error('SEM_CREDITO');if(r.status===401)throw new Error('CHAVE');if(r.status===400&&/voice/i.test(t))throw new Error('timbre indisponível na sua conta');throw new Error('erro '+r.status)}if(!r.ok)throw new Error('tts '+r.status);
@@ -1165,7 +1166,7 @@ if(NATIVE&&NATIVE.mediaStart)try{NATIVE.mediaStart()}catch(e){}
 $('appMusic').addEventListener('click',e=>{const pl=store.get('playlist','');if(NATIVE){e.preventDefault();NATIVE.playPlaylist()}else if(pl){e.preventDefault();window.open(pl,'_blank')}});
 if(NATIVE&&store.get('playlist',''))try{NATIVE.setPlaylist(store.get('playlist',''))}catch(e){}
 
-const VOICES=[['onyx','Onyx','grave e profundo'],['cedar','Cedar','encorpado, natural'],['ash','Ash','firme e seco'],['ballad','Ballad','elegante, suave'],['echo','Echo','direto, sóbrio'],['verse','Verse','expressivo'],['fable','Fable','narrador, caloroso'],['sage','Sage','calmo, sereno'],['alloy','Alloy','neutro, claro'],['marin','Marin','natural, leve'],['coral','Coral','vivo, aberto'],['nova','Nova','brilhante']];
+const VOICES=[['onyx','Onyx','o mais grave, imponente'],['cedar','Cedar','encorpado, natural, premium'],['ash','Ash','firme, seco, decidido'],['echo','Echo','sóbrio, direto'],['verse','Verse','intenso, expressivo'],['ballad','Ballad','elegante, aveludado']];
 const SAMPLE='Oi, eu sou o Jarvis, apelidado como Pantera Negra. Irei te ajudar para sempre.';
 function buildDeviceVoices(){const box=$('devVoices');if(!box)return;box.innerHTML='';
   const all=window.speechSynthesis?speechSynthesis.getVoices().filter(v=>/^pt/i.test(v.lang)):[];
