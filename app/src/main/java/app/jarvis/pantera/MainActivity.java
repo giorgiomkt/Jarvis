@@ -399,6 +399,19 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void stopListen() { ui.post(() -> { if (recognizer != null) recognizer.stopListening(); }); }
         @JavascriptInterface public void open(String url) { openExternal(url); }
         @JavascriptInterface public void setPlaylist(String link) { prefs.edit().putString("playlist", link == null ? "" : link).apply(); }
+        @JavascriptInterface public void playSearch(String query) {
+            ui.post(() -> {
+                // pede ao Spotify para tocar o melhor resultado da busca
+                Intent i = new Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH);
+                i.putExtra(android.app.SearchManager.QUERY, query);
+                i.putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*");
+                i.setPackage("com.spotify.music");
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                try { startActivity(i); }
+                catch (Exception e) { openExternal("spotify:search:" + Uri.encode(query)); }
+                Diag.stage(MainActivity.this, "música pedida: " + query);
+            });
+        }
         @JavascriptInterface public void playPlaylist() { ui.post(() -> MainActivity.this.playPlaylist(false)); }
         @JavascriptInterface public void mediaStart() { if (!safe) ui.post(MainActivity.this::mediaStart); }
         @JavascriptInterface public void mediaCmd(String c) { ui.post(() -> MainActivity.this.mediaCmd(c)); }
