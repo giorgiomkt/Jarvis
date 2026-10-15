@@ -891,13 +891,21 @@ const VOICE_STYLE={
   sport:"Mais energia e mais ritmo, firme e cortante, como um motor subindo de giro.",
   furia:"Modo fúria: voz ainda mais grave e intensa, quase um rosnado contido, frases curtas e cortantes, autoridade total, sem gritar."};
 let curAudio=null;
+/* iPhone/Android: o áudio só toca se for "destravado" num toque. Usamos um único player, destravado no primeiro toque. */
+const voicePlayer=new Audio();voicePlayer.setAttribute('playsinline','');let audioUnlocked=false;
+const SILENT='data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiJrDCQBTcu3UrAIwUdkRgQbFAZC1CQEwTJ9mjRvBA4UOLD8nKVOWfh+UlK3z/177OXrfOdKl7pyn3Xf//WreyTRUoAWgBgkOAGbZHBgG1OF6zM82DWbZaUmMBptgQhGjsyYqc9ae9XFz280948NMBWInljyzsNRFLPWdnZGWrddDsjK1unuSrVN9jJsK8KuQtQCtMBjCEtImISdNKJOopIpBFpNSMbIHCSRpRR5iakjTiyzLhchUUBwCgyKiweBv/7UsQbg8isVNoMPMjAAAA0gAAABEVFGmgqK////9bP/6XCykxBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
+function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;
+  try{voicePlayer.src=SILENT;const pr=voicePlayer.play();if(pr)pr.catch(()=>{audioUnlocked=false})}catch(e){audioUnlocked=false}
+  try{if(window.speechSynthesis){const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u)}}catch(e){}
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume()}catch(e){}}
+['pointerdown','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,unlockAudio,{capture:true,passive:true}));
 async function neuralSpeak(text,voice,style){
   const key=store.get('oaKey','');if(!key)throw new Error('sem chave');
   const instructions=VOICE_STYLE.base0+' '+(PERSONA_VOICE[style||store.get('voiceStyle','pantera')]||PERSONA_VOICE.pantera)+' Nunca robótica, nunca de locutor de rádio. Palavras em italiano como andiamo e allora saem naturais.'+(mode==='sport'?' '+VOICE_STYLE.sport:mode==='furia'?' '+VOICE_STYLE.furia:'');
   const call=model=>fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},
     body:JSON.stringify({model,voice:voice||store.get('oaVoice','onyx'),input:text.slice(0,3800),instructions,response_format:'mp3',speed:mode==='furia'||mode==='sport'?1.05:0.97})});
   let r=await call('gpt-4o-mini-tts');if(!r.ok&&r.status===404)r=await call('tts-1-hd');if(!r.ok){const t=await r.text().catch(()=>'');if(r.status===429&&/quota|billing|credit/i.test(t))throw new Error('SEM_CREDITO');if(r.status===401)throw new Error('CHAVE');if(r.status===400&&/voice/i.test(t))throw new Error('timbre indisponível na sua conta');throw new Error('erro '+r.status)}if(!r.ok)throw new Error('tts '+r.status);
-  const url=URL.createObjectURL(await r.blob());if(curAudio){curAudio.pause()}const a=new Audio(url);curAudio=a;
+  const url=URL.createObjectURL(await r.blob());const a=voicePlayer;a.pause();a.src=url;curAudio=a;
   a.onplay=()=>setPhase('speaking');a.onended=a.onerror=()=>{setPhase(null);$('live').textContent='';URL.revokeObjectURL(url);document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'))};
   await a.play();
 }
