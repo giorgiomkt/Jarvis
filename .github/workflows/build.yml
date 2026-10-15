@@ -7,8 +7,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -18,7 +18,11 @@ jobs:
       - name: Compilar APK
         env:
           VERSION_CODE: ${{ github.run_number }}
-        run: gradle assembleRelease --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --console=plain 2>&1 | tee build.log || {
+            grep -E "error:|\.java:[0-9]+|What went wrong|Could not|Execution failed|> " build.log | grep -v "^> Task" | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1; }
       - name: Renomear
         run: cp app/build/outputs/apk/release/app-release.apk JARVIS.apk
       - uses: actions/upload-artifact@v4
