@@ -7,7 +7,13 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.ComponentName;
 import android.content.ContentValues;
+import android.graphics.Bitmap;
+import android.media.MediaMetadata;
+import android.media.session.MediaController;
+import android.media.session.MediaSessionManager;
+import android.media.session.PlaybackState;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.net.Uri;
@@ -42,7 +48,9 @@ import androidx.webkit.WebViewAssetLoader;
 
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -60,6 +68,14 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private SharedPreferences prefs;
+    private MediaSessionManager msm;
+    private MediaController current;
+    private final MediaController.Callback mediaCb = new MediaController.Callback() {
+        @Override public void onMetadataChanged(MediaMetadata m) { pushMedia(); }
+        @Override public void onPlaybackStateChanged(PlaybackState s) { pushMedia(); }
+        @Override public void onSessionDestroyed() { pickSession(null); }
+    };
+    private final MediaSessionManager.OnActiveSessionsChangedListener sessionsCb = this::pickSession;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle saved) {
@@ -132,6 +148,11 @@ public class MainActivity extends Activity {
                     | View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                     | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
         }
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (msm == null && mediaAccess()) ui.postDelayed(this::mediaStart, 300);
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
@@ -264,6 +285,74 @@ public class MainActivity extends Activity {
         am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, code));
     }
 
+    // ---------- Tocando agora ----------
+    private ComponentName listener() { return new ComponentName(this, MediaListener.class); }
+    private boolean mediaAccess() {
+        String flat = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
+        return flat != null && flat.contains(getPackageName());
+    }
+    private void mediaStart() {
+        if (!mediaAccess()) { js("window.__nMediaAccess&&__nMediaAccess(false)"); return; }
+        try {
+            msm = (MediaSessionManager) getSystemService(Context.MEDIA_SESSION_SERVICE);
+            msm.addOnActiveSessionsChangedListener(sessionsCb, listener());
+            pickSession(msm.getActiveSessions(listener()));
+        } catch (SecurityException e) { js("window.__nMediaAccess&&__nMediaAccess(false)"); }
+    }
+    private void pickSession(List<MediaController> list) {
+        if (list == null && msm != null) { try { list = msm.getActiveSessions(listener()); } catch (Exception e) { list = null; } }
+        MediaController best = null;
+        if (list != null) {
+            for (MediaController c : list) {
+                PlaybackState st = c.getPlaybackState();
+                if (best == null) best = c;
+                if (st != null && st.getState() == PlaybackState.STATE_PLAYING) { best = c; break; }
+                if ("com.spotify.music".equals(c.getPackageName()) && best.getPlaybackState() == null) best = c;
+            }
+        }
+        if (current != null) current.unregisterCallback(mediaCb);
+        current = best;
+        if (current != null) current.registerCallback(mediaCb, ui);
+        pushMedia();
+    }
+    private String lastArtKey = "";
+    private void pushMedia() {
+        try {
+            JSONObject o = new JSONObject();
+            if (current == null) { o.put("title", ""); o.put("artist", ""); o.put("playing", false); o.put("art", ""); js("__nMedia(" + o + ")"); return; }
+            MediaMetadata m = current.getMetadata();
+            PlaybackState st = current.getPlaybackState();
+            String title = m == null ? "" : String.valueOf(m.getText(MediaMetadata.METADATA_KEY_TITLE) == null ? "" : m.getText(MediaMetadata.METADATA_KEY_TITLE));
+            String artist = m == null ? "" : String.valueOf(m.getText(MediaMetadata.METADATA_KEY_ARTIST) == null ? "" : m.getText(MediaMetadata.METADATA_KEY_ARTIST));
+            o.put("title", title); o.put("artist", artist); o.put("app", current.getPackageName());
+            o.put("playing", st != null && st.getState() == PlaybackState.STATE_PLAYING);
+            String key = title + "|" + artist;
+            if (!key.equals(lastArtKey) && m != null) {
+                lastArtKey = key;
+                Bitmap b = m.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+                if (b == null) b = m.getBitmap(MediaMetadata.METADATA_KEY_ART);
+                if (b != null) {
+                    Bitmap s = Bitmap.createScaledBitmap(b, 120, 120 * b.getHeight() / Math.max(1, b.getWidth()), true);
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    s.compress(Bitmap.CompressFormat.JPEG, 82, out);
+                    o.put("art", android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP));
+                } else o.put("art", "");
+            }
+            js("__nMedia(" + o + ")");
+        } catch (Exception ignored) { }
+    }
+    private void mediaCmd(String cmd) {
+        if (current == null) { if ("toggle".equals(cmd)) playPlaylist(false); return; }
+        MediaController.TransportControls t = current.getTransportControls();
+        PlaybackState st = current.getPlaybackState();
+        switch (cmd) {
+            case "next": t.skipToNext(); break;
+            case "prev": t.skipToPrevious(); break;
+            default:
+                if (st != null && st.getState() == PlaybackState.STATE_PLAYING) t.pause(); else t.play();
+        }
+    }
+
     // ---------- Abrir apps e links ----------
     private void openExternal(String url) {
         try {
@@ -291,6 +380,15 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void open(String url) { openExternal(url); }
         @JavascriptInterface public void setPlaylist(String link) { prefs.edit().putString("playlist", link == null ? "" : link).apply(); }
         @JavascriptInterface public void playPlaylist() { ui.post(() -> playPlaylist(false)); }
+        @JavascriptInterface public void mediaStart() { ui.post(MainActivity.this::mediaStart); }
+        @JavascriptInterface public void mediaCmd(String c) { ui.post(() -> MainActivity.this.mediaCmd(c)); }
+        @JavascriptInterface public void requestMediaAccess() {
+            try { startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); } catch (Exception ignored) { }
+        }
+        @JavascriptInterface public void openPlayer() {
+            Intent i = getPackageManager().getLaunchIntentForPackage(current != null ? current.getPackageName() : "com.spotify.music");
+            if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); try { startActivity(i); } catch (Exception ignored) { } }
+        }
         @JavascriptInterface public void saveConfig(String json) { prefs.edit().putString("vault", json).apply(); }
         @JavascriptInterface public String loadConfig() { return prefs.getString("vault", ""); }
         @JavascriptInterface public boolean saveBackup(String json) {
@@ -330,6 +428,8 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if (tts != null) tts.shutdown();
         if (recognizer != null) recognizer.destroy();
+        if (msm != null) msm.removeOnActiveSessionsChangedListener(sessionsCb);
+        if (current != null) current.unregisterCallback(mediaCb);
         if (web != null) web.destroy();
         super.onDestroy();
     }

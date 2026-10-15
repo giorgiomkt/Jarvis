@@ -141,9 +141,25 @@ body.listening .ai .ctrls .mic{animation:pulse 1s ease-in-out infinite}
 .obdtag{margin-left:auto;font-size:12px;white-space:nowrap;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;height:44px;display:flex;align-items:center;gap:8px}
 .obdtag i{width:8px;height:8px;border-radius:50%;background:#555}
 .obdtag.live{color:var(--ink)}.obdtag.live i{background:#39d98a;box-shadow:0 0 8px #39d98a}
-.apps{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:12px}
-.app{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-size:18px;color:#d9d4cd;text-decoration:none}
-.app svg{width:40px;height:40px}
+.apps{display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:10px;padding:14px 16px}
+.np{display:flex;align-items:center;gap:12px;min-width:0}
+.np-art{width:58px;height:58px;border-radius:8px;flex:none;background:#1a1a1d center/cover no-repeat;display:grid;place-items:center;color:#1ed760;box-shadow:0 0 0 1px var(--hair)}
+.np-art svg{width:28px;height:28px}.np-art.has svg{display:none}
+.np-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.np-title{overflow:hidden;white-space:nowrap;font-size:17px;font-weight:600;mask-image:linear-gradient(90deg,#000 85%,transparent);-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent)}
+.np-title span{display:inline-block;padding-right:40px}
+.np-title.run span{animation:marq var(--dur,10s) linear infinite}
+@keyframes marq{0%,12%{transform:translateX(0)}88%,100%{transform:translateX(var(--dist))}}
+.np-artist{font-size:14px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.np-ctl{display:flex;align-items:center;gap:2px;flex:none}
+.np-ctl button{width:44px;height:44px;display:grid;place-items:center;color:#e9e4dc;border-radius:50%}
+.np-ctl svg{width:20px;height:20px}
+.np-ctl .np-play{width:48px;height:48px;background:var(--accent);color:#000;box-shadow:0 0 14px var(--glow)}
+.np-ctl .np-play svg{width:22px;height:22px}
+.np.off .np-ctl button:not(.np-play){opacity:.35}
+.approw{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--hair);padding-top:8px}
+.app{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:13px;color:#bdb8b1;text-decoration:none;min-height:52px}
+.app svg{width:24px;height:24px}
 .app:active{color:var(--accent)}
 
 /* Gaveta de conversa */
@@ -438,10 +454,21 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
       </div>
     </div>
     <div class="card apps">
+      <div class="np" id="np">
+        <button class="np-art" id="npArt" aria-label="Abrir Spotify"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M7 9.5c3.5-1 7.5-.6 10.5 1M7.6 12.6c3-.8 6.2-.4 8.6 1M8.3 15.6c2.4-.6 4.7-.3 6.6.8"/></svg></button>
+        <div class="np-txt"><div class="np-title"><span id="npTitle">Spotify</span></div><span class="np-artist" id="npArtist">Sua playlist no play</span></div>
+        <div class="np-ctl">
+          <button id="npPrev" aria-label="Anterior"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+          <button id="npPlay" class="np-play" aria-label="Tocar ou pausar"><svg id="npIcoPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg><svg id="npIcoPause" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button>
+          <button id="npNext" aria-label="Próxima"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+        </div>
+      </div>
+      <div class="approw">
       <button class="app" id="appNotes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7"/></svg>Notas</button>
       <button class="app" id="appSettings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Config.</button>
       <a class="app" id="appMusic" href="https://open.spotify.com" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M7 9.5c3.5-1 7.5-.6 10.5 1M7.6 12.6c3-.8 6.2-.4 8.6 1M8.3 15.6c2.4-.6 4.7-.3 6.6.8"/></svg>Música</a>
-      <a class="app" href="tel:" ><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/></svg>Telefone</a>
+      <a class="app" href="tel:"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"/></svg>Telefone</a>
+      </div>
     </div>
   </section>
 </div>
@@ -986,6 +1013,23 @@ $('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.
   store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.';vaultSave()});
 $('btnClear').addEventListener('click',()=>{history=[];store.set('history',[]);render();$('settings').hidden=true});
 $('btnClearNotes').addEventListener('click',()=>{notes=[];store.set('notes',[]);$('settings').hidden=true});
+
+/* Tocando agora (Spotify e qualquer player) */
+let np={title:'',artist:'',playing:false,live:false};
+function marquee(){const box=document.querySelector('.np-title'),sp=$('npTitle');box.classList.remove('run');requestAnimationFrame(()=>{const over=sp.scrollWidth-box.clientWidth;if(over>4){box.style.setProperty('--dist',-(over+20)+'px');box.style.setProperty('--dur',Math.max(6,over/28+4)+'s');box.classList.add('run')}})}
+window.__nMedia=m=>{np=Object.assign(np,m,{live:true});$('np').classList.toggle('off',!np.title);
+  $('npTitle').textContent=np.title||'Nada tocando';$('npArtist').textContent=np.artist||(np.app?np.app:'');
+  $('npIcoPlay').style.display=np.playing?'none':'';$('npIcoPause').style.display=np.playing?'':'none';
+  const art=$('npArt');if(m.art){art.style.backgroundImage='url(data:image/jpeg;base64,'+m.art+')';art.classList.add('has')}else if('art' in m){art.style.backgroundImage='';art.classList.remove('has')}
+  marquee()};
+window.__nMediaAccess=ok=>{if(!ok){$('npTitle').textContent='Ativar o player';$('npArtist').textContent='Toque para liberar a leitura da música';np.live=false;marquee()}};
+function media(cmd){if(NATIVE&&NATIVE.mediaCmd&&np.live){NATIVE.mediaCmd(cmd);return}
+  if(NATIVE&&NATIVE.requestMediaAccess&&!np.live&&cmd!=='toggle'){NATIVE.requestMediaAccess();return}
+  if(cmd==='toggle'){if(NATIVE&&NATIVE.playPlaylist){NATIVE.playPlaylist();return}const pl=store.get('playlist','');window.open(pl||'https://open.spotify.com','_blank')}}
+$('npPrev').addEventListener('click',()=>media('prev'));$('npNext').addEventListener('click',()=>media('next'));$('npPlay').addEventListener('click',()=>media('toggle'));
+$('npArt').addEventListener('click',()=>{if(NATIVE&&NATIVE.openPlayer){NATIVE.openPlayer();return}window.open(store.get('playlist','')||'https://open.spotify.com','_blank')});
+$('np').classList.add('off');marquee();
+if(NATIVE&&NATIVE.mediaStart)try{NATIVE.mediaStart()}catch(e){}
 
 /* Música: abre a playlist configurada */
 $('appMusic').addEventListener('click',e=>{const pl=store.get('playlist','');if(NATIVE){e.preventDefault();NATIVE.playPlaylist()}else if(pl){e.preventDefault();window.open(pl,'_blank')}});
