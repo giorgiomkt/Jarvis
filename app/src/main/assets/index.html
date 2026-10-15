@@ -336,6 +336,14 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
 .iv-strip img{height:90px;border-radius:8px;cursor:pointer;opacity:.75;flex:none}
 .iv-strip img:hover{opacity:1}
 .m .thumbimg{max-width:100%;border-radius:10px;margin-top:4px;cursor:pointer;box-shadow:0 0 0 1px var(--hair)}
+.voices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.vc{display:flex;align-items:center;gap:10px;min-height:56px;padding:8px 12px;border:1px solid var(--hair);border-radius:12px;text-align:left;background:var(--panel2)}
+.vc b{font-size:15px;display:block}.vc small{font-size:12px;color:var(--dim)}
+.vc i{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;border:1px solid var(--hair);font-style:normal;font-size:13px;color:var(--accent)}
+.vc.on{border-color:var(--accent);box-shadow:0 0 14px -4px var(--glow)}
+.vc.on i{background:var(--accent);color:#000}
+.vc.playing i{animation:pulse .6s ease-in-out infinite}
+@media (max-width:700px){.voices{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body data-mode="conforto">
@@ -483,9 +491,9 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
       </div>
       <div class="two">
         <div class="f"><label for="voiceEngine">Voz da Pantera</label><select id="voiceEngine"><option value="pantera">Pantera · voz neural (OpenAI)</option><option value="device">Voz do aparelho</option></select></div>
-        <div class="f"><label for="oaVoice">Timbre</label><select id="oaVoice"><option value="onyx">Onyx · grave e profundo</option><option value="ash">Ash · firme</option><option value="echo">Echo · seco</option><option value="ballad">Ballad · elegante</option><option value="verse">Verse · expressivo</option><option value="sage">Sage · calmo</option></select></div>
+        <div class="f"><label for="voiceStyle">Personalidade da voz</label><select id="voiceStyle"><option value="pantera">Pantera · grave, calma, predadora</option><option value="jarvis">Jarvis · elegante, preciso, mordomo de elite</option><option value="italiano">Italiano · charme e calor, sangue quente</option><option value="comandante">Comandante · firme, curto, autoridade</option></select></div>
       </div>
-      <div class="row"><button class="pill ghost" id="voiceTest" type="button">Ouvir a Pantera</button></div>
+      <div class="f"><label>Timbre · toque para ouvir</label><input type="hidden" id="oaVoice"><div class="voices" id="voices"></div><small id="voiceMsg">Toque em um timbre: ele fala na hora e fica selecionado. Depois, Salvar.</small></div>
       <div class="f"><label for="apiKey">Chave da API Anthropic</label><input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"><small>Gerada em console.anthropic.com. Fica salva só neste aparelho.</small></div>
       <div class="two">
         <div class="f"><label for="model">Cérebro</label><select id="model"><option value="claude-sonnet-5-5">Sonnet 5.5 · rápido</option><option value="claude-opus-5-5">Opus 5.5 · profundo</option><option value="claude-haiku-5-5">Haiku 5.5 · leve</option></select></div>
@@ -870,19 +878,24 @@ function loadVoices(){voices=(window.speechSynthesis?speechSynthesis.getVoices()
 if(window.speechSynthesis){loadVoices();speechSynthesis.onvoiceschanged=loadVoices}
 const NATIVE=window.Native||null;
 window.__nSpeak=ev=>{if(ev==='start')setPhase('speaking');else{setPhase(null);$('live').textContent=''}};
+const PERSONA_VOICE={
+  pantera:"Você é a Pantera: voz masculina grave, baixa e encorpada, levemente rouca, calma e poderosa como um predador em repouso. Confiante, magnética, calorosa, com pausas intencionais e ritmo sem pressa.",
+  jarvis:"Você é o Jarvis: voz masculina refinada e precisa, culta, serena e levemente irônica, como um mordomo de elite que sabe tudo. Dicção impecável, ritmo seguro, sorriso na voz.",
+  italiano:"Você é um sócio italiano radicado no Brasil: voz masculina quente e charmosa, expressiva, com energia e paixão, falando português do Brasil impecável, sem sotaque, apenas o calor italiano no jeito.",
+  comandante:"Você é um comandante: voz masculina firme e grave, frases curtas, autoridade calma, zero hesitação, transmite segurança total."};
 const VOICE_STYLE={
-  base:"Fale em português do Brasil com sotaque brasileiro nativo, sem nenhum sotaque estrangeiro. Você é a Pantera: voz masculina grave, baixa e encorpada, levemente rouca, calma e poderosa como um predador em repouso. Confiante, magnética, calorosa, com pausas intencionais e ritmo sem pressa. Nunca robótica, nunca de locutor de rádio. Palavras em italiano como andiamo e allora saem naturais.",
+  base0:"Fale em português do Brasil, com pronúncia brasileira nativa e natural, sem nenhum sotaque estrangeiro.",
   sport:"Mais energia e mais ritmo, firme e cortante, como um motor subindo de giro.",
   furia:"Modo fúria: voz ainda mais grave e intensa, quase um rosnado contido, frases curtas e cortantes, autoridade total, sem gritar."};
 let curAudio=null;
-async function neuralSpeak(text,voice){
+async function neuralSpeak(text,voice,style){
   const key=store.get('oaKey','');if(!key)throw new Error('sem chave');
-  const instructions=VOICE_STYLE.base+(mode==='sport'?' '+VOICE_STYLE.sport:mode==='furia'?' '+VOICE_STYLE.furia:'');
+  const instructions=VOICE_STYLE.base0+' '+(PERSONA_VOICE[style||store.get('voiceStyle','pantera')]||PERSONA_VOICE.pantera)+' Nunca robótica, nunca de locutor de rádio. Palavras em italiano como andiamo e allora saem naturais.'+(mode==='sport'?' '+VOICE_STYLE.sport:mode==='furia'?' '+VOICE_STYLE.furia:'');
   const call=model=>fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},
     body:JSON.stringify({model,voice:voice||store.get('oaVoice','onyx'),input:text.slice(0,3800),instructions,response_format:'mp3',speed:mode==='furia'||mode==='sport'?1.05:0.97})});
-  let r=await call('gpt-4o-mini-tts');if(!r.ok&&r.status===404)r=await call('tts-1-hd');if(!r.ok)throw new Error('tts '+r.status);
+  let r=await call('gpt-4o-mini-tts');if(!r.ok&&r.status===404)r=await call('tts-1-hd');if(!r.ok&&r.status===400){const t=await r.text();throw new Error(/voice/i.test(t)?'timbre indisponível na sua conta':'tts 400')}if(!r.ok)throw new Error('tts '+r.status);
   const url=URL.createObjectURL(await r.blob());if(curAudio){curAudio.pause()}const a=new Audio(url);curAudio=a;
-  a.onplay=()=>setPhase('speaking');a.onended=a.onerror=()=>{setPhase(null);$('live').textContent='';URL.revokeObjectURL(url)};
+  a.onplay=()=>setPhase('speaking');a.onended=a.onerror=()=>{setPhase(null);$('live').textContent='';URL.revokeObjectURL(url);document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'))};
   await a.play();
 }
 function speak(text){
@@ -1003,13 +1016,13 @@ function openChat(){openHub('hoje');setTimeout(()=>$('typeInput').focus(),80)}
 function showNotes(){openHub('notas')}
 
 /* Gavetas */
-function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('voiceEngine').value=store.get('voiceEngine','pantera');$('oaVoice').value=store.get('oaVoice','onyx');$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
+function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('voiceEngine').value=store.get('voiceEngine','pantera');$('oaVoice').value=store.get('oaVoice','onyx');$('voiceStyle').value=store.get('voiceStyle','pantera');buildVoices();$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
 $('btnChat').addEventListener('click',()=>openHub('hoje'));$('aiThumb').addEventListener('click',()=>openHub('hoje'));$('aiTitle').addEventListener('click',()=>openHub('hoje'));
 $('btnNotes').addEventListener('click',showNotes);$('appNotes').addEventListener('click',showNotes);$('appSettings').addEventListener('click',openSettings);
 document.querySelectorAll('.drawer').forEach(d=>d.addEventListener('click',e=>{if(e.target===d||e.target.closest('[data-close]'))d.hidden=true}));
 addEventListener('keydown',e=>{if(e.key==='Escape'){$('imgview').hidden=true;document.querySelectorAll('.drawer').forEach(d=>d.hidden=true);$('hub').hidden=true}});
 $('compose').addEventListener('submit',e=>{e.preventDefault();const v=$('typeInput').value.trim();if(!v)return;$('typeInput').value='';ask(v)});
-$('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('voiceEngine',$('voiceEngine').value);store.set('oaVoice',$('oaVoice').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
+$('btnSave').addEventListener('click',()=>{store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('voiceEngine',$('voiceEngine').value);store.set('oaVoice',$('oaVoice').value||'onyx');store.set('voiceStyle',$('voiceStyle').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
   store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.';vaultSave()});
 $('btnClear').addEventListener('click',()=>{history=[];store.set('history',[]);render();$('settings').hidden=true});
 $('btnClearNotes').addEventListener('click',()=>{notes=[];store.set('notes',[]);$('settings').hidden=true});
@@ -1035,9 +1048,18 @@ if(NATIVE&&NATIVE.mediaStart)try{NATIVE.mediaStart()}catch(e){}
 $('appMusic').addEventListener('click',e=>{const pl=store.get('playlist','');if(NATIVE){e.preventDefault();NATIVE.playPlaylist()}else if(pl){e.preventDefault();window.open(pl,'_blank')}});
 if(NATIVE&&store.get('playlist',''))try{NATIVE.setPlaylist(store.get('playlist',''))}catch(e){}
 
-$('voiceTest').addEventListener('click',()=>{store.set('oaKey',$('oaKey').value.trim());const v=$('oaVoice').value;
-  const t='Buongiorno, Giorgio. Motor ligado, cabeça fria. Me diz qual é a jogada de hoje, que eu cuido do resto.';
-  if($('voiceEngine').value==='pantera'&&store.get('oaKey',''))neuralSpeak(t,v).catch(()=>deviceSpeak(t));else deviceSpeak(t)});
+const VOICES=[['onyx','Onyx','grave e profundo'],['cedar','Cedar','encorpado, natural'],['ash','Ash','firme e seco'],['ballad','Ballad','elegante, suave'],['echo','Echo','direto, sóbrio'],['verse','Verse','expressivo'],['fable','Fable','narrador, caloroso'],['sage','Sage','calmo, sereno'],['alloy','Alloy','neutro, claro'],['marin','Marin','natural, leve'],['coral','Coral','vivo, aberto'],['nova','Nova','brilhante']];
+const SAMPLE='Buongiorno, Giorgio. Motor ligado, cabeça fria. Me diz qual é a jogada de hoje, que eu cuido do resto.';
+function buildVoices(){const box=$('voices');box.innerHTML='';const cur=$('oaVoice').value||store.get('oaVoice','onyx');
+  VOICES.forEach(([id,n,d])=>{const b=document.createElement('button');b.type='button';b.className='vc'+(id===cur?' on':'');b.dataset.v=id;
+    b.innerHTML='<i>▶</i><span><b></b><small></small></span>';b.querySelector('b').textContent=n;b.querySelector('small').textContent=d;
+    b.onclick=()=>previewVoice(id,b);box.appendChild(b)})}
+async function previewVoice(id,btn){$('oaVoice').value=id;document.querySelectorAll('.vc').forEach(x=>x.classList.toggle('on',x.dataset.v===id));
+  const key=$('oaKey').value.trim();if(key)store.set('oaKey',key);
+  if(!key){$('voiceMsg').textContent='Cole a chave da OpenAI acima para ouvir os timbres.';return}
+  document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'));btn&&btn.classList.add('playing');$('voiceMsg').textContent='Gerando a amostra…';
+  try{await neuralSpeak(SAMPLE,id,$('voiceStyle').value);$('voiceMsg').textContent='Tocando: '+id+'. Gostou? Toque em Salvar.'}catch(e){btn&&btn.classList.remove('playing');$('voiceMsg').textContent='Não consegui tocar essa voz ('+e.message+').'}}
+$('voiceStyle').addEventListener('change',()=>{const id=$('oaVoice').value||'onyx';previewVoice(id,document.querySelector('.vc[data-v="'+id+'"]'))});
 
 /* Backup */
 $('bkExport').addEventListener('click',()=>{$('btnSave').click();$('settings').hidden=false;const data=JSON.stringify({app:'JARVIS',v:1,at:new Date().toISOString(),data:snapshot()});
