@@ -511,6 +511,7 @@ body.listening .hub-mic{animation:pulse 1s ease-in-out infinite}
         <div class="f"><label for="voiceEngine">Voz da Pantera</label><select id="voiceEngine"><option value="pantera">Pantera · voz neural (OpenAI)</option><option value="device">Voz do aparelho</option></select></div>
         <div class="f"><label for="voiceStyle">Personalidade da voz</label><select id="voiceStyle"><option value="pantera">Pantera · grave, calma, predadora</option><option value="jarvis">Jarvis · IA mordomo de elite, sereno e irônico</option><option value="italiano">Italiano · charme e calor, sangue quente</option><option value="locutor">Locutor · grave de rádio, presença total</option><option value="comandante">Comandante · firme, curto, autoridade</option></select></div>
       </div>
+      <div class="f"><label for="voiceFx">Efeito na voz</label><select id="voiceFx"><option value="sombra">Sombra · vilão, grave e rasgada</option><option value="fera">Fera · rouca e grave</option><option value="natural">Natural · sem efeito</option></select></div>
       <div class="f"><label>Timbre · toque para ouvir</label><input type="hidden" id="oaVoice"><div class="voices" id="voices"></div><small id="voiceMsg">Toque em um timbre: ele fala na hora e fica selecionado. Depois, Salvar.</small></div>
       <div class="f"><label>Vozes do aparelho · funcionam sem internet</label><div class="voices" id="devVoices"></div></div>
       <div class="f"><label for="apiKey">Chave da API Anthropic</label><input id="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"><small>Gerada em console.anthropic.com. Fica salva só neste aparelho.</small></div>
@@ -559,7 +560,7 @@ function vaultSave(){clearTimeout(vaultTimer);vaultTimer=setTimeout(async()=>{co
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 const store={get(k,d){try{const v=localStorage.getItem('pn:'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('pn:'+k,JSON.stringify(v));if(SYNC.includes(k)&&!syncing){localStorage.setItem('pn:syncAt',String(Date.now()));syncPush()}}catch(e){}vaultSave()}};
 /* Nuvem do Giorgio (Apps Script da agenda): salvou num aparelho, vale em todos */
-const SYNC=['apiKey','oaKey','calUrl','model','voiceEngine','oaVoice','voiceStyle','voice','imgModel','persona','furyRpm','furyThr','tireF','tireR','playlist','notes','habits','focus','history'];
+const SYNC=['apiKey','oaKey','calUrl','model','voiceEngine','oaVoice','voiceStyle','voiceFx','voice','imgModel','persona','furyRpm','furyThr','tireF','tireR','playlist','notes','habits','focus','history'];
 let syncing=false,syncT=null;
 function syncBase(){const s=(()=>{try{return JSON.parse(localStorage.getItem('pn:calUrl')||'""')}catch(e){return''}})();if(!/^https:\/\/script\.google\.com\//.test(s))return null;try{const u=new URL(s);return{url:u.origin+u.pathname,k:u.searchParams.get('k')}}catch(e){return null}}
 function syncPush(){clearTimeout(syncT);syncT=setTimeout(()=>{const b=syncBase();if(!b||!b.k)return;const ak=localStorage.getItem('pn:apiKey');if(!ak||ak.length<8)return;const data={};SYNC.forEach(k=>{const v=localStorage.getItem('pn:'+k);if(v!=null)data[k]=v});
@@ -988,7 +989,7 @@ if(window.speechSynthesis){loadVoices();speechSynthesis.onvoiceschanged=loadVoic
 const NATIVE=window.Native||null;
 window.__nSpeak=ev=>{if(ev==='start')setPhase('speaking');else{setPhase(null);$('live').textContent=''}};
 const PERSONA_VOICE={
-  pantera:"Você é a Pantera: voz masculina grave, baixa e encorpada, levemente rouca, calma e poderosa como um predador em repouso. Confiante, magnética, calorosa, com pausas intencionais e ritmo sem pressa.",
+  pantera:"Você é a Pantera: um vilão elegante. Voz masculina muito grave, rouca e áspera, com textura de fumaça e cascalho no fundo da garganta. Fala baixo, devagar e com controle total, quase um rosnado contido, sombria e ameaçadora, mas sofisticada. Pausas longas e intencionais, como um predador que já decidiu o desfecho. Nunca grita, nunca é teatral.",
   jarvis:"Você é o Jarvis, uma inteligência artificial de mordomo de elite: voz masculina madura, culta e serena, dicção impecável e levemente formal, tom calmo mesmo sob pressão, com um humor seco e sutil, sempre um passo à frente. Fala como quem administra uma mansão e um arsenal ao mesmo tempo: polido, preciso, discreto, com pausas elegantes. Trata o Giorgio com respeito e leve ironia.",
   italiano:"Você é um sócio italiano radicado no Brasil: voz masculina quente e charmosa, expressiva, com energia e paixão, falando português do Brasil impecável, sem sotaque, apenas o calor italiano no jeito.",
   locutor:"Você é um locutor brasileiro de rádio FM premium: voz masculina muito grave e encorpada, ressonante, peito aberto, articulação perfeita, ritmo firme e envolvente, presença que enche o carro.",
@@ -1010,13 +1011,29 @@ function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;
   try{if(window.speechSynthesis){const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u)}}catch(e){}
   try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume()}catch(e){}}
 ['pointerdown','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,unlockAudio,{capture:true,passive:true}));
+/* Efeito na voz: mais grave (sem ficar lenta), rouca e com presença de vilão */
+let vfx=null;
+const FX={natural:{rate:1,low:0,grit:0,wet:0},fera:{rate:.91,low:5,grit:3,wet:.22},sombra:{rate:.85,low:7,grit:5,wet:.38}};
+function fxName(){return ($('voiceFx')&&!$('settings').hidden?$('voiceFx').value:null)||store.get('voiceFx','sombra')}
+function fxRate(){return (FX[fxName()]||FX.sombra).rate}
+function applyVoiceFx(){const f=FX[fxName()]||FX.sombra;
+  try{voicePlayer.preservesPitch=false;voicePlayer.mozPreservesPitch=false;voicePlayer.webkitPreservesPitch=false}catch(e){}
+  voicePlayer.defaultPlaybackRate=f.rate;voicePlayer.playbackRate=f.rate;
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();
+    if(!vfx){const src=ac.createMediaElementSource(voicePlayer),low=ac.createBiquadFilter(),mid=ac.createBiquadFilter(),hi=ac.createBiquadFilter(),ws=ac.createWaveShaper(),wf=ac.createBiquadFilter(),dry=ac.createGain(),wet=ac.createGain(),comp=ac.createDynamicsCompressor(),out=ac.createGain();
+      low.type='lowshelf';low.frequency.value=170;mid.type='peaking';mid.frequency.value=2400;mid.Q.value=.9;hi.type='lowpass';hi.frequency.value=9000;
+      const k=new Float32Array(4096);for(let i=0;i<4096;i++){const x=i/2048-1;k[i]=Math.tanh(x*6)/Math.tanh(6)}ws.curve=k;ws.oversample='4x';wf.type='bandpass';wf.frequency.value=1600;wf.Q.value=.6;
+      comp.threshold.value=-22;comp.ratio.value=4;comp.attack.value=.004;comp.release.value=.2;out.gain.value=1.15;
+      src.connect(low);low.connect(mid);mid.connect(hi);hi.connect(dry);hi.connect(ws);ws.connect(wf);wf.connect(wet);dry.connect(comp);wet.connect(comp);comp.connect(out);out.connect(ac.destination);
+      vfx={low,mid,wet,dry}}
+    vfx.low.gain.value=f.low;vfx.mid.gain.value=f.grit;vfx.wet.gain.value=f.wet;vfx.dry.gain.value=1-f.wet*.35}catch(e){}}
 async function neuralSpeak(text,voice,style){
   const key=store.get('oaKey','');if(!key)throw new Error('sem chave');
   const instructions=VOICE_STYLE.base0+' '+(PERSONA_VOICE[style||store.get('voiceStyle','pantera')]||PERSONA_VOICE.pantera)+' Nunca robótica, nunca caricata. Palavras em italiano como andiamo e allora saem naturais.'+(mode==='sport'?' '+VOICE_STYLE.sport:mode==='furia'?' '+VOICE_STYLE.furia:'');
   const call=model=>fetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+key},
-    body:JSON.stringify({model,voice:voice||store.get('oaVoice','onyx'),input:text.slice(0,3800),instructions,response_format:'mp3',speed:mode==='furia'||mode==='sport'?1.05:0.97})});
+    body:JSON.stringify({model,voice:voice||store.get('oaVoice','onyx'),input:text.slice(0,3800),instructions,response_format:'mp3',speed:Math.min(1.3,(mode==='furia'||mode==='sport'?1.05:0.97)/fxRate())})});
   let r=await call('gpt-4o-mini-tts');if(!r.ok&&r.status===404)r=await call('tts-1-hd');if(!r.ok){const t=await r.text().catch(()=>'');if(r.status===429&&/quota|billing|credit/i.test(t))throw new Error('SEM_CREDITO');if(r.status===401)throw new Error('CHAVE');if(r.status===400&&/voice/i.test(t))throw new Error('timbre indisponível na sua conta');throw new Error('erro '+r.status)}if(!r.ok)throw new Error('tts '+r.status);
-  const url=URL.createObjectURL(await r.blob());const a=voicePlayer;a.pause();a.src=url;curAudio=a;
+  const url=URL.createObjectURL(await r.blob());const a=voicePlayer;a.pause();a.src=url;curAudio=a;applyVoiceFx();
   a.onplay=()=>setPhase('speaking');a.onended=a.onerror=()=>{setPhase(null);$('live').textContent='';URL.revokeObjectURL(url);document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'))};
   await a.play();
 }
@@ -1152,13 +1169,13 @@ function openChat(){openHub('hoje');setTimeout(()=>$('typeInput').focus(),80)}
 function showNotes(){openHub('notas')}
 
 /* Gavetas */
-function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('voiceEngine').value=store.get('voiceEngine','pantera');$('oaVoice').value=store.get('oaVoice','onyx');$('voiceStyle').value=store.get('voiceStyle','pantera');buildVoices();$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('calUrl').value=store.get('calUrl','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
+function openSettings(){$('apiKey').value=store.get('apiKey','');$('oaKey').value=store.get('oaKey','');$('imgModel').value=store.get('imgModel','gpt-image-2');$('voiceEngine').value=store.get('voiceEngine','pantera');$('oaVoice').value=store.get('oaVoice','onyx');$('voiceStyle').value=store.get('voiceStyle','pantera');$('voiceFx').value=store.get('voiceFx','sombra');buildVoices();$('model').value=store.get('model','claude-sonnet-5-5');$('persona').value=store.get('persona',DEFAULT_PERSONA);$('furyRpm').value=store.get('furyRpm',4500);$('furyThr').value=store.get('furyThr',85);$('tireF').value=store.get('tireF','');$('playlist').value=store.get('playlist','');$('calUrl').value=store.get('calUrl','');$('tireR').value=store.get('tireR','');loadVoices();$('settings').hidden=false}
 $('btnChat').addEventListener('click',()=>openHub('hoje'));$('aiThumb').addEventListener('click',()=>openHub('hoje'));$('aiTitle').addEventListener('click',()=>openHub('hoje'));
 $('btnNotes').addEventListener('click',showNotes);$('appNotes').addEventListener('click',showNotes);$('appSettings').addEventListener('click',openSettings);
 document.querySelectorAll('.drawer').forEach(d=>d.addEventListener('click',e=>{if(e.target===d||e.target.closest('[data-close]'))d.hidden=true}));
 addEventListener('keydown',e=>{if(e.key==='Escape'){$('imgview').hidden=true;document.querySelectorAll('.drawer').forEach(d=>d.hidden=true);$('hub').hidden=true}});
 $('compose').addEventListener('submit',e=>{e.preventDefault();const v=$('typeInput').value.trim();if(!v)return;$('typeInput').value='';ask(v)});
-$('btnSave').addEventListener('click',()=>{const newCal=$('calUrl').value.trim()&&$('calUrl').value.trim()!==store.get('calUrl','');if(newCal)syncing=true;store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('voiceEngine',$('voiceEngine').value);store.set('oaVoice',$('oaVoice').value||'onyx');store.set('voiceStyle',$('voiceStyle').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
+$('btnSave').addEventListener('click',()=>{const newCal=$('calUrl').value.trim()&&$('calUrl').value.trim()!==store.get('calUrl','');if(newCal)syncing=true;store.set('apiKey',$('apiKey').value.trim());store.set('oaKey',$('oaKey').value.trim());store.set('imgModel',$('imgModel').value);store.set('voiceEngine',$('voiceEngine').value);store.set('oaVoice',$('oaVoice').value||'onyx');store.set('voiceStyle',$('voiceStyle').value);store.set('voiceFx',$('voiceFx').value);store.set('model',$('model').value);store.set('voice',$('voiceName').value);
   store.set('persona',$('persona').value.trim()||DEFAULT_PERSONA);store.set('furyRpm',+$('furyRpm').value||4500);store.set('furyThr',+$('furyThr').value||85);store.set('tireF',$('tireF').value);store.set('playlist',$('playlist').value.trim());store.set('calUrl',$('calUrl').value.trim());cal.at=0;calEnsure(true);if(newCal){syncing=false;localStorage.setItem('pn:syncAt','0');sessionStorage.removeItem('pn:synced');syncPull()}if(NATIVE)try{NATIVE.setPlaylist($('playlist').value.trim())}catch(e){};store.set('tireR',$('tireR').value);renderTel();$('settings').hidden=true;$('aiLine').textContent='Ajustes salvos. Andiamo.';vaultSave()});
 $('btnClear').addEventListener('click',()=>{history=[];store.set('history',[]);render();$('settings').hidden=true});
 $('btnClearNotes').addEventListener('click',()=>{notes=[];store.set('notes',[]);$('settings').hidden=true});
@@ -1206,6 +1223,7 @@ async function previewVoice(id,btn){$('oaVoice').value=id;document.querySelector
   document.querySelectorAll('.vc.playing').forEach(x=>x.classList.remove('playing'));btn&&btn.classList.add('playing');$('voiceMsg').classList.remove('err');$('voiceMsg').textContent='Gerando a amostra com a voz '+id+'…';
   try{await neuralSpeak(SAMPLE,id,$('voiceStyle').value);$('voiceMsg').textContent='Tocando: '+id+'. Gostou? Toque em Salvar.'}catch(e){btn&&btn.classList.remove('playing');const m=e.message;$('voiceMsg').textContent=m==='SEM_CREDITO'?'A conta da OpenAI está sem crédito. Adicione crédito em platform.openai.com › Billing e toque de novo.':m==='CHAVE'?'A chave da OpenAI foi recusada. Confira se colou inteira.':/Failed to fetch|NetworkError|Load failed/i.test(m)?'Sem acesso à internet aqui. Abra o pantera.html direto no Chrome (a prévia dentro do Claude bloqueia a conexão).':'Não consegui tocar essa voz ('+m+').';
     $('voiceMsg').classList.add('err');if(m==='SEM_CREDITO')document.querySelectorAll('.vc').forEach(x=>x.classList.add('locked'))}}
+$('voiceFx').addEventListener('change',()=>{const id=$('oaVoice').value||'onyx';previewVoice(id,document.querySelector('.vc[data-v="'+id+'"]'))});
 $('voiceStyle').addEventListener('change',()=>{const id=$('oaVoice').value||'onyx';previewVoice(id,document.querySelector('.vc[data-v="'+id+'"]'))});
 
 /* Backup */
