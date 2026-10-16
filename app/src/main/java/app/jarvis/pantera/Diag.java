@@ -104,6 +104,26 @@ public final class Diag {
                 + "\n--- ETAPAS DESTA SESSÃO ---\n" + bootLog(c);
     }
 
+    static final String NUVEM = "https://script.google.com/macros/s/AKfycbyXw0EIZN3sZQYDJIJl3OFkmp4JUUkkSUWa4ksUQ0Jj--X0EEOyC67-E_hSuSwGJnXZKw/exec";
+
+    /** Envia o relatório direto para a nuvem do Giorgio, onde o Claude lê. */
+    public static void sendReport(Context c, java.util.function.Consumer<String> done) {
+        final String txt = report(c);
+        new Thread(() -> {
+            String res;
+            try {
+                java.net.HttpURLConnection h = (java.net.HttpURLConnection) new java.net.URL(NUVEM).openConnection();
+                h.setRequestMethod("POST"); h.setDoOutput(true); h.setConnectTimeout(15000); h.setReadTimeout(20000);
+                h.setRequestProperty("Content-Type", "text/plain; charset=utf-8");
+                org.json.JSONObject j = new org.json.JSONObject(); j.put("a", "relatorio"); j.put("texto", txt);
+                try (java.io.OutputStream o = h.getOutputStream()) { o.write(j.toString().getBytes(StandardCharsets.UTF_8)); }
+                int code = h.getResponseCode();
+                res = code < 400 ? "Relatório enviado ao Claude ✓" : "Falhou (HTTP " + code + "). Tire uma foto da tela.";
+            } catch (Throwable e) { res = "Sem internet agora: " + e.getMessage(); }
+            if (done != null) done.accept(res);
+        }).start();
+    }
+
     /** Salva o relatório em Download/JARVIS para o usuário mandar. */
     public static String saveReport(Context c) {
         String txt = report(c);

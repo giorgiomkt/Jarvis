@@ -25,6 +25,8 @@ public class SafeActivity extends Activity {
         super.onCreate(b);
         Diag.stage(this, "SafeActivity.onCreate");
         build();
+        // manda o relatório sozinho ao abrir, para o Claude ler mesmo que ninguém toque em nada
+        Diag.sendReport(this, r -> runOnUiThread(() -> { if (status != null) status.setText("Automático: " + r); }));
         Diag.stage(this, "SafeActivity desenhada");
     }
 
@@ -112,6 +114,7 @@ public class SafeActivity extends Activity {
             startActivity(new Intent(this, MainActivity.class));
         }));
         status = text("", 16, 0xFFFFB340, false);
+        col.addView(button("Enviar relatório ao Claude", true, v -> { status.setText("Enviando…"); Diag.sendReport(this, r -> runOnUiThread(() -> status.setText(r))); }));
         col.addView(button("Salvar relatório em Download/JARVIS", false, v -> status.setText(Diag.saveReport(this))));
         col.addView(button("Limpar registros", false, v -> { Diag.clear(this); build(); }));
         col.addView(status);
